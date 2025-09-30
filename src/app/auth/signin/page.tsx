@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import { signIn, getSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { LogIn, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
 
 export default function SignInPage() {
-  const [email, setEmail] = useState('admin@company.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -22,22 +24,22 @@ export default function SignInPage() {
     setError('')
 
     try {
-      // Простая аутентификация для демо
-      if (email === 'admin@company.com' && password === 'admin123') {
-        // Сохраняем токен в localStorage
-        localStorage.setItem('auth-token', 'demo-token')
-        localStorage.setItem('user', JSON.stringify({
-          id: '1',
-          name: 'Администратор',
-          email: 'admin@company.com',
-          role: 'ADMIN',
-          companyId: 'company-1'
-        }))
-        
-        // Перенаправляем на главную
-        router.push('/')
-      } else {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false
+      })
+
+      if (result?.error) {
         setError('Неверные учетные данные')
+      } else {
+        // Проверяем сессию
+        const session = await getSession()
+        if (session) {
+          router.push('/')
+        } else {
+          setError('Ошибка создания сессии')
+        }
       }
     } catch (err) {
       setError('Ошибка входа в систему')
@@ -48,81 +50,89 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md animate-fade-in">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto h-12 w-12 rounded-full bg-primary flex items-center justify-center mb-4">
+          <div className="mx-auto w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center mb-4">
             <LogIn className="h-6 w-6 text-white" />
           </div>
           <CardTitle className="text-2xl">Вход в систему</CardTitle>
           <CardDescription>
-            Войдите в свой аккаунт для доступа к порталу
+            Войдите в свой аккаунт для доступа к панели управления
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+            
+            <div>
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@company.com"
+                placeholder="Введите ваш email"
                 required
-                className="w-full"
+                className="mt-1"
               />
             </div>
-            
-            <div className="space-y-2">
+
+            <div>
               <Label htmlFor="password">Пароль</Label>
-              <div className="relative">
+              <div className="relative mt-1">
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="admin123"
+                  placeholder="Введите ваш пароль"
                   required
-                  className="w-full pr-10"
+                  className="pr-10"
                 />
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                   onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-4 w-4 text-gray-400" />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-4 w-4 text-gray-400" />
                   )}
-                </Button>
+                </button>
               </div>
             </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-800">{error}</p>
-              </div>
-            )}
 
             <Button 
               type="submit" 
-              className="w-full gradient-primary hover:opacity-90"
+              className="w-full" 
               disabled={loading}
             >
-              {loading ? 'Вход...' : 'Войти'}
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Вход...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Войти
+                </div>
+              )}
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">Демо аккаунты:</h4>
-            <div className="text-xs text-blue-700 space-y-1">
-              <p><strong>Администратор:</strong> admin@company.com / admin123</p>
-              <p><strong>Менеджер:</strong> manager@company.com / admin123</p>
-              <p><strong>Пользователь:</strong> user@company.com / admin123</p>
-            </div>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Нет аккаунта?{' '}
+              <Link href="/auth/signup" className="text-blue-600 hover:text-blue-500 font-medium">
+                Зарегистрироваться
+              </Link>
+            </p>
           </div>
         </CardContent>
       </Card>

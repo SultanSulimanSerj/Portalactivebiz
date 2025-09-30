@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -16,12 +16,20 @@ import {
   BarChart3,
   Users,
   Settings,
-  Code,
   Menu,
   X
 } from 'lucide-react'
+import { UserRole, getAvailableNavigationSections } from '@/lib/permissions'
 
-const navigation = [
+interface NavigationItem {
+  name: string
+  href: string
+  icon: any
+  permission?: string
+  roles?: UserRole[]
+}
+
+const navigation: NavigationItem[] = [
   { name: 'Главная', href: '/', icon: Home },
   { name: 'Проекты', href: '/projects', icon: FolderOpen },
   { name: 'Задачи', href: '/tasks', icon: Flag },
@@ -30,15 +38,65 @@ const navigation = [
   { name: 'Согласования', href: '/approvals', icon: CheckCircle },
   { name: 'Чат', href: '/chat', icon: MessageSquare },
   { name: 'Шаблоны', href: '/templates', icon: File },
-  { name: 'Отчеты', href: '/reports', icon: BarChart3 },
-  { name: 'Пользователи', href: '/users', icon: Users },
-  { name: 'Настройки', href: '/settings', icon: Settings },
-  { name: 'API Docs', href: '/api-docs', icon: Code },
+  { 
+    name: 'Отчеты', 
+    href: '/reports', 
+    icon: BarChart3,
+    permission: 'canViewReports'
+  },
+  { 
+    name: 'Пользователи', 
+    href: '/users', 
+    icon: Users,
+    permission: 'canManageUsers'
+  },
+  { 
+    name: 'Настройки', 
+    href: '/settings', 
+    icon: Settings,
+    permission: 'canViewSystemSettings'
+  },
 ]
 
 export default function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
+  const [userRole, setUserRole] = useState<UserRole>(UserRole.USER)
+  const [userInfo, setUserInfo] = useState<{ name: string; email: string } | null>(null)
   const pathname = usePathname()
+
+  // Получаем информацию о пользователе
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const response = await fetch('/api/auth/session')
+        if (response.ok) {
+          const session = await response.json()
+          if (session?.user) {
+            setUserRole(session.user.role as UserRole)
+            setUserInfo({
+              name: session.user.name || 'Пользователь',
+              email: session.user.email || 'user@example.com'
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user info:', error)
+      }
+    }
+
+    fetchUserInfo()
+  }, [])
+
+  // Фильтруем навигацию по правам доступа
+  const availableSections = getAvailableNavigationSections(userRole)
+  const filteredNavigation = navigation.filter(item => {
+    // Если нет ограничений по правам, показываем всем
+    if (!item.permission) return true
+    
+    // Проверяем доступность раздела
+    const sectionName = item.href.replace('/', '') || 'dashboard'
+    return availableSections.includes(sectionName)
+  })
 
   return (
     <>
@@ -75,7 +133,7 @@ export default function Navigation() {
           </div>
 
           <div className="space-y-2">
-            {navigation.map((item) => {
+            {filteredNavigation.map((item) => {
               const isActive = pathname === item.href
               return (
                 <Link
@@ -100,11 +158,23 @@ export default function Navigation() {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                <span className="text-white text-sm font-medium">U</span>
+                <span className="text-white text-sm font-medium">
+                  {userInfo?.name?.charAt(0)?.toUpperCase() || 'U'}
+                </span>
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">Пользователь</p>
-                <p className="text-xs text-gray-500">admin@example.com</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {userInfo?.name || 'Пользователь'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {userInfo?.email || 'user@example.com'}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {userRole === UserRole.OWNER && 'Владелец'}
+                  {userRole === UserRole.ADMIN && 'Администратор'}
+                  {userRole === UserRole.MANAGER && 'Менеджер'}
+                  {userRole === UserRole.USER && 'Пользователь'}
+                </p>
               </div>
             </div>
           </div>

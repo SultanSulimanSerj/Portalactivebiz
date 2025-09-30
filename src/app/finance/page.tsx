@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Layout from '@/components/layout'
-import { Plus, TrendingUp, TrendingDown, Filter, X, Trash2, ArrowLeft } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, Filter, X, Trash2, ArrowLeft, DollarSign, Percent } from 'lucide-react'
 import Link from 'next/link'
 
 interface FinanceRecord {
@@ -46,9 +46,7 @@ export default function FinancePage() {
   const fetchCurrentProject = async () => {
     if (!projectIdFromUrl) return
     try {
-      const response = await fetch(`/api/projects/${projectIdFromUrl}`, {
-        headers: { 'Authorization': 'Bearer demo-token' }
-      })
+      const response = await fetch(`/api/projects/${projectIdFromUrl}`)
       if (response.ok) {
         const data = await response.json()
         setCurrentProject(data)
@@ -61,7 +59,6 @@ export default function FinancePage() {
   const fetchRecords = async () => {
     try {
       const response = await fetch('/api/finance', {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -77,7 +74,6 @@ export default function FinancePage() {
   const fetchProjects = async () => {
     try {
       const response = await fetch('/api/projects', {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -95,7 +91,6 @@ export default function FinancePage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer demo-token'
         },
         body: JSON.stringify({
           ...formData,
@@ -127,7 +122,6 @@ export default function FinancePage() {
     try {
       const response = await fetch(`/api/finance/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
 
       if (response.ok) {
@@ -149,6 +143,7 @@ export default function FinancePage() {
   const totalIncome = projectFilteredRecords.filter(r => r.type === 'INCOME').reduce((sum, r) => sum + Number(r.amount), 0)
   const totalExpenses = projectFilteredRecords.filter(r => r.type === 'EXPENSE').reduce((sum, r) => sum + Number(r.amount), 0)
   const balance = totalIncome - totalExpenses
+  const margin = totalIncome > 0 ? ((balance / totalIncome) * 100) : 0
 
   if (loading) {
     return (
@@ -194,7 +189,7 @@ export default function FinancePage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg p-5 border">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-green-50 rounded-lg">
@@ -217,10 +212,37 @@ export default function FinancePage() {
 
           <div className={`bg-white rounded-lg p-5 border ${balance >= 0 ? 'border-green-200' : 'border-red-200'}`}>
             <div className="flex items-center gap-3 mb-2">
-              <p className="text-sm text-gray-600">Баланс</p>
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <DollarSign className="h-5 w-5 text-blue-600" />
+              </div>
+              <p className="text-sm text-gray-600">Прибыль</p>
             </div>
             <p className={`text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {balance.toLocaleString()} ₽
+            </p>
+          </div>
+
+          <div className={`bg-white rounded-lg p-5 border ${margin >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-purple-50 rounded-lg">
+                <Percent className="h-5 w-5 text-purple-600" />
+              </div>
+              <p className="text-sm text-gray-600">Маржа</p>
+            </div>
+            <p className={`text-2xl font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {margin.toFixed(1)}%
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg p-5 border">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-gray-50 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-gray-600" />
+              </div>
+              <p className="text-sm text-gray-600">Рентабельность</p>
+            </div>
+            <p className={`text-2xl font-bold ${margin >= 10 ? 'text-green-600' : margin >= 0 ? 'text-yellow-600' : 'text-red-600'}`}>
+              {margin >= 10 ? 'Отличная' : margin >= 0 ? 'Хорошая' : 'Убыточная'}
             </p>
           </div>
         </div>

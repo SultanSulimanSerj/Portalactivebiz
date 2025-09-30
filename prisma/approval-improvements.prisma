@@ -1,0 +1,114 @@
+// Улучшенная система согласований - дополнительные enum'ы и модели
+
+// Новые enum'ы для улучшенной системы согласований
+enum ApprovalPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ApprovalParticipantRole {
+  INITIATOR
+  APPROVER
+  REVIEWER
+  OBSERVER
+}
+
+enum ApprovalWorkflowStepType {
+  SEQUENTIAL
+  PARALLEL
+}
+
+// Обновленная модель Approval с новыми полями
+model Approval {
+  id          String        @id @default(cuid())
+  title       String
+  description String?       @db.Text  // Больше текста
+  status      ApprovalStatus @default(PENDING)
+  type        ApprovalType
+  data        Json?
+  priority    ApprovalPriority @default(MEDIUM)
+  dueDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  
+  // Новые поля
+  requireAllApprovals Boolean @default(false)  // Требуется согласие всех
+  autoPublishOnApproval Boolean @default(true) // Автопубликация документа
+  
+  // Relations
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  documentId String?
+  document  Document? @relation(fields: [documentId], references: [id])
+  creatorId String
+  creator   User @relation("ApprovalCreator", fields: [creatorId], references: [id])
+  
+  assignments ApprovalAssignment[]
+  comments    ApprovalComment[]
+  attachments ApprovalAttachment[]
+  history     ApprovalHistory[]
+}
+
+// Комментарии к согласованию
+model ApprovalComment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  approvalId String
+  approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  userId String
+  user   User @relation("ApprovalComments", fields: [userId], references: [id])
+}
+
+// Вложения к согласованию
+model ApprovalAttachment {
+  id        String   @id @default(cuid())
+  fileName  String
+  filePath  String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime @default(now())
+  
+  approvalId String
+  approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User @relation("ApprovalAttachments", fields: [uploadedById], references: [id])
+}
+
+// История изменений согласования
+model ApprovalHistory {
+  id        String   @id @default(cuid())
+  action    String   // "created", "approved", "rejected", "commented", etc.
+  changes   Json?    // Детали изменений
+  createdAt DateTime @default(now())
+  
+  approvalId String
+  approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  userId String
+  user   User @relation("ApprovalHistory", fields: [userId], references: [id])
+}
+
+// Обновленная модель ApprovalAssignment с ролями
+model ApprovalAssignment {
+  id        String   @id @default(cuid())
+  status    ApprovalStatus @default(PENDING)
+  role      ApprovalParticipantRole @default(APPROVER)
+  comment   String?  @db.Text
+  order     Int      @default(0)  // Порядок согласования
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  respondedAt DateTime?
+  
+  approvalId String
+  approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  userId String
+  user   User @relation("ApprovalAssignments", fields: [userId], references: [id])
+  
+  @@unique([approvalId, userId])
+}

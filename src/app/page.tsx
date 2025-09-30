@@ -2,29 +2,37 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Dashboard from '@/components/dashboard'
-import Layout from '@/components/layout'
 
 export default function Home() {
-  const [loading, setLoading] = useState(true)
+  const { data: session, status } = useSession()
   const router = useRouter()
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Проверяем токен в localStorage
-    const token = localStorage.getItem('auth-token')
-    if (!token) {
+    if (status === 'loading') {
+      setLoading(true)
+    } else if (status === 'unauthenticated') {
       router.push('/auth/signin')
-    } else {
+    } else if (status === 'authenticated') {
       setLoading(false)
     }
-  }, [router])
+  }, [status, router])
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-sm text-gray-500">Загрузка...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="text-sm text-gray-500 mt-2">Загрузка...</div>
+        </div>
       </div>
     )
+  }
+
+  if (!session) {
+    return null
   }
 
   return <Dashboard />

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth-api'
+import { checkPermission, filterDataByPermissions } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await authenticateUser(request)
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { allowed, user, error } = await checkPermission(request, 'canManageUsers')
+    
+    if (!allowed) {
+      return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -43,6 +45,7 @@ export async function GET(request: NextRequest) {
       prisma.user.count({ where })
     ])
 
+
     return NextResponse.json({
       users,
       pagination: {
@@ -60,46 +63,53 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await authenticateUser(request)
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { allowed, user, error } = await checkPermission(request, 'canCreateUsers')
+    
+    if (!allowed) {
+      return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
     const body = await request.json()
     const { name, email, password, role, position } = body
 
-    // Hash password (в реальном приложении)
+    // Проверяем права на создание пользователей с определенной ролью
+    if (role === UserRole.OWNER && user.role !== UserRole.OWNER) {
+      return NextResponse.json({ error: 'Недостаточно прав для создания владельца' }, { status: 403 })
+    }
+
+    // Hash password
     const bcrypt = require('bcryptjs')
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role,
-        position,
-        companyId: user.companyId
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        position: true,
-        createdAt: true
-      }
-    })
+    try {
+      const newUser = await prisma.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          role,
+          position,
+          companyId: user.companyId
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          position: true,
+          createdAt: true
+        }
+      })
 
-    return NextResponse.json(newUser, { status: 201 })
-  } catch (error: any) {
-    console.error('Error creating user:', error)
-    
-    // Check for unique constraint violation (duplicate email)
-    if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'Email уже используется' }, { status: 400 })
+      return NextResponse.json(newUser, { status: 201 })
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        return NextResponse.json({ error: 'Email уже используется' }, { status: 400 })
+      }
+      throw error
     }
-    
+  } catch (error) {
+    console.error('Error creating user:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

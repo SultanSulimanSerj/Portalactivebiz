@@ -49,7 +49,6 @@ export default function DocumentsPage() {
     if (!projectIdFromUrl) return
     try {
       const response = await fetch(`/api/projects/${projectIdFromUrl}`, {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -63,7 +62,6 @@ export default function DocumentsPage() {
   const fetchDocuments = async () => {
     try {
       const response = await fetch('/api/documents', {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -79,7 +77,6 @@ export default function DocumentsPage() {
   const fetchProjects = async () => {
     try {
       const response = await fetch('/api/projects', {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -106,7 +103,6 @@ export default function DocumentsPage() {
       const response = await fetch('/api/documents/upload', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer demo-token'
         },
         body: formDataToSend
       })
@@ -122,8 +118,19 @@ export default function DocumentsPage() {
     }
   }
 
-  const handleDownload = async (filePath: string, fileName: string) => {
-    window.open(`/uploads/${filePath}`, '_blank')
+  const handleDownload = async (documentId: string, fileName: string) => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}/download`)
+      if (response.ok) {
+        // Если ответ - редирект, браузер автоматически перейдет по URL
+        window.open(`/api/documents/${documentId}/download`, '_blank')
+      } else {
+        alert('Ошибка при скачивании файла')
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      alert('Ошибка при скачивании файла')
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -132,7 +139,6 @@ export default function DocumentsPage() {
     try {
       const response = await fetch(`/api/documents/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
 
       if (response.ok) {
@@ -279,7 +285,7 @@ export default function DocumentsPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button 
-                          onClick={() => handleDownload(doc.filePath, doc.fileName)}
+                          onClick={() => handleDownload(doc.id, doc.fileName)}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" 
                           title="Скачать"
                         >

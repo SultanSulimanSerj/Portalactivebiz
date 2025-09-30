@@ -61,7 +61,6 @@ export default function TaskDetailPage() {
   const fetchTask = async () => {
     try {
       const response = await fetch(`/api/tasks/${params.id}`, {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -80,7 +79,6 @@ export default function TaskDetailPage() {
   const fetchComments = async () => {
     try {
       const response = await fetch(`/api/tasks/${params.id}/comments`, {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -94,7 +92,6 @@ export default function TaskDetailPage() {
   const fetchUsers = async () => {
     try {
       const response = await fetch('/api/users', {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -114,7 +111,6 @@ export default function TaskDetailPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer demo-token'
         },
         body: JSON.stringify({ content: newComment })
       })
@@ -150,7 +146,6 @@ export default function TaskDetailPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer demo-token'
         },
         body: JSON.stringify({
           title: editForm.title,

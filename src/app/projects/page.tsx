@@ -16,7 +16,7 @@ interface Project {
   endDate: string | null
   creator: { name: string | null }
   users: Array<{ user: { id: string; name: string | null } }>
-  _count: { tasks: number; documents: number }
+  _count: { tasks: number; documents: number; users: number }
   financialSummary?: {
     income: number
     expenses: number
@@ -49,7 +49,6 @@ export default function ProjectsPage() {
   const fetchProjects = async () => {
     try {
       const response = await fetch('/api/projects', {
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
       if (response.ok) {
         const data = await response.json()
@@ -103,7 +102,6 @@ export default function ProjectsPage() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer demo-token'
         },
         body: JSON.stringify(formData)
       })
@@ -123,7 +121,6 @@ export default function ProjectsPage() {
     try {
       const response = await fetch(`/api/projects/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': 'Bearer demo-token' }
       })
 
       if (response.ok) {
@@ -297,7 +294,7 @@ export default function ProjectsPage() {
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Users className="h-3 w-3 text-gray-400" />
-                          <span className="text-sm text-gray-900">{project.users.length}</span>
+                          <span className="text-sm text-gray-900">{project._count.users}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -399,6 +396,9 @@ export default function ProjectsPage() {
                     onChange={(e) => setFormData({...formData, budget: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Бюджет будет автоматически добавлен как планируемый доход в финансовые записи
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

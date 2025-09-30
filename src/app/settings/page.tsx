@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,13 +8,15 @@ import { Label } from '@/components/ui/label'
 import { Settings, Save, User, Bell, Shield, Database, Globe, LogOut } from 'lucide-react'
 import Layout from '@/components/layout'
 import { useRouter } from 'next/navigation'
+import { useSession, signOut } from 'next-auth/react'
 
 export default function SettingsPage() {
+  const { data: session } = useSession()
   const [settings, setSettings] = useState({
-    companyName: 'ООО "СтройКомпания"',
-    email: 'admin@company.com',
-    phone: '+7 (495) 123-45-67',
-    address: 'г. Москва, ул. Строительная, д. 1',
+    companyName: '',
+    email: '',
+    phone: '',
+    address: '',
     notifications: {
       email: true,
       sms: false,
@@ -31,6 +33,19 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const router = useRouter()
 
+  // Загружаем данные пользователя при загрузке компонента
+  useEffect(() => {
+    if (session?.user) {
+      setSettings(prev => ({
+        ...prev,
+        email: session.user.email || '',
+        companyName: session.user.name || '',
+        phone: session.user.phone || '',
+        address: session.user.address || ''
+      }))
+    }
+  }, [session])
+
   const handleSave = async () => {
     setLoading(true)
     // Имитация сохранения
@@ -41,9 +56,7 @@ export default function SettingsPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('auth-token')
-    localStorage.removeItem('user')
-    router.push('/auth/signin')
+    signOut({ callbackUrl: '/auth/signin' })
   }
 
   return (

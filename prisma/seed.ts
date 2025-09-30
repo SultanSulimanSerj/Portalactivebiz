@@ -174,7 +174,12 @@ async function main() {
       description: 'Получен аванс 30% от стоимости проекта',
       amount: 15000000,
       date: new Date('2024-01-01'),
-      projectId: project1.id
+      project: {
+        connect: { id: project1.id }
+      },
+      creator: {
+        connect: { id: admin.id }
+      }
     }
   })
 
@@ -188,7 +193,12 @@ async function main() {
       description: 'Закупка бетона и арматуры',
       amount: 5000000,
       date: new Date('2024-01-15'),
-      projectId: project1.id
+      project: {
+        connect: { id: project1.id }
+      },
+      creator: {
+        connect: { id: admin.id }
+      }
     }
   })
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/layout'
+import { PermissionGuard } from '@/components/permission-guard'
 import { 
   FolderOpen, 
   FileText, 
@@ -31,9 +32,9 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       const [projectsRes, tasksRes, documentsRes] = await Promise.all([
-        fetch('/api/projects', { headers: { 'Authorization': 'Bearer demo-token' } }),
-        fetch('/api/tasks', { headers: { 'Authorization': 'Bearer demo-token' } }),
-        fetch('/api/documents', { headers: { 'Authorization': 'Bearer demo-token' } })
+        fetch('/api/projects'),
+        fetch('/api/tasks'),
+        fetch('/api/documents')
       ])
 
       const projects = await projectsRes.json()
@@ -54,19 +55,78 @@ export default function Dashboard() {
   }
 
   const statCards = [
-    { name: 'Всего проектов', value: stats.totalProjects, icon: FolderOpen, link: '/projects', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { name: 'Активных', value: stats.activeProjects, icon: Activity, link: '/projects', color: 'text-green-600', bg: 'bg-green-50' },
-    { name: 'Задач', value: stats.totalTasks, icon: Flag, link: '/tasks', color: 'text-orange-600', bg: 'bg-orange-50' },
-    { name: 'Документов', value: stats.totalDocuments, icon: FileText, link: '/documents', color: 'text-purple-600', bg: 'bg-purple-50' }
+    { 
+      name: 'Всего проектов',
+      value: stats.totalProjects,
+      icon: FolderOpen,
+      color: 'bg-blue-500',
+      href: '/projects'
+    },
+    { 
+      name: 'Активные проекты',
+      value: stats.activeProjects,
+      icon: Activity,
+      color: 'bg-green-500',
+      href: '/projects'
+    },
+    { 
+      name: 'Всего задач',
+      value: stats.totalTasks,
+      icon: CheckCircle,
+      color: 'bg-purple-500',
+      href: '/tasks'
+    },
+    { 
+      name: 'Документы',
+      value: stats.totalDocuments,
+      icon: FileText,
+      color: 'bg-orange-500',
+      href: '/documents'
+    }
+  ]
+
+  const quickActions = [
+    {
+      title: 'Создать проект',
+      description: 'Добавить новый проект в систему',
+      icon: FolderOpen,
+      href: '/projects/create',
+      color: 'bg-blue-50 text-blue-600',
+      permission: 'canCreateProjects'
+    },
+    {
+      title: 'Добавить задачу',
+      description: 'Создать новую задачу',
+      icon: Flag,
+      href: '/tasks/create',
+      color: 'bg-green-50 text-green-600',
+      permission: 'canCreateTasks'
+    },
+    {
+      title: 'Загрузить документ',
+      description: 'Добавить новый документ',
+      icon: FileText,
+      href: '/documents',
+      color: 'bg-purple-50 text-purple-600',
+      permission: 'canCreateDocuments'
+    },
+    {
+      title: 'Финансовый отчет',
+      description: 'Просмотреть финансовую отчетность',
+      icon: DollarSign,
+      href: '/reports',
+      color: 'bg-orange-50 text-orange-600',
+      permission: 'canViewReports'
+    }
   ]
 
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-96">
+        <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-sm text-gray-600">Загрузка данных...</p>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Загрузка данных...</p>
           </div>
         </div>
       </Layout>
@@ -76,133 +136,87 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Welcome Section */}
-        <div className="bg-white rounded-xl p-6 border shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">Добро пожаловать! 👋</h1>
-              <p className="text-gray-600">Вот что происходит в ваших проектах сегодня</p>
-            </div>
-            <div className="hidden md:flex items-center gap-3 text-sm text-gray-600">
-              <Calendar className="h-5 w-5" />
-              <span className="font-medium">{new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-            </div>
-          </div>
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Панель управления</h1>
+          <p className="text-sm text-gray-600 mt-1">Обзор ваших проектов и задач</p>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {statCards.map((stat) => {
-            const Icon = stat.icon
-            return (
-              <Link
-                key={stat.name}
-                href={stat.link}
-                className="bg-white rounded-xl p-5 border hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`p-3 ${stat.bg} rounded-lg`}>
-                    <Icon className={`h-6 w-6 ${stat.color}`} />
-                  </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {statCards.map((stat) => (
+            <Link key={stat.name} href={stat.href}>
+              <div className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                    <p className="text-sm text-gray-600">{stat.name}</p>
+                    <p className="text-sm font-medium text-gray-600">{stat.name}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+                  </div>
+                  <div className={`${stat.color} p-3 rounded-lg`}>
+                    <stat.icon className="h-6 w-6 text-white" />
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t flex items-center text-blue-600 text-sm">
-                  <span>Подробнее</span>
-                  <ArrowUpRight className="h-4 w-4 ml-1" />
+                <div className="mt-4 flex items-center text-sm text-gray-500">
+                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                  Перейти к разделу
                 </div>
-              </Link>
-            )
-          })}
+              </div>
+            </Link>
+          ))}
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl p-6 border shadow-sm">
+        <div>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Быстрые действия</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Link
-              href="/projects"
-              className="flex flex-col items-center p-4 border rounded-lg hover:bg-blue-50 hover:border-blue-200 transition-all group"
-            >
-              <div className="p-3 bg-blue-50 rounded-lg mb-2 group-hover:bg-blue-100">
-                <FolderOpen className="h-5 w-5 text-blue-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Новый проект</span>
-            </Link>
-
-            <Link
-              href="/tasks"
-              className="flex flex-col items-center p-4 border rounded-lg hover:bg-orange-50 hover:border-orange-200 transition-all group"
-            >
-              <div className="p-3 bg-orange-50 rounded-lg mb-2 group-hover:bg-orange-100">
-                <Flag className="h-5 w-5 text-orange-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Новая задача</span>
-            </Link>
-
-            <Link
-              href="/documents"
-              className="flex flex-col items-center p-4 border rounded-lg hover:bg-purple-50 hover:border-purple-200 transition-all group"
-            >
-              <div className="p-3 bg-purple-50 rounded-lg mb-2 group-hover:bg-purple-100">
-                <FileText className="h-5 w-5 text-purple-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Документ</span>
-            </Link>
-
-            <Link
-              href="/finance"
-              className="flex flex-col items-center p-4 border rounded-lg hover:bg-green-50 hover:border-green-200 transition-all group"
-            >
-              <div className="p-3 bg-green-50 rounded-lg mb-2 group-hover:bg-green-100">
-                <DollarSign className="h-5 w-5 text-green-600" />
-              </div>
-              <span className="text-sm font-medium text-gray-700">Запись</span>
-            </Link>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {quickActions.map((action) => (
+              <PermissionGuard key={action.title} permission={action.permission}>
+                <Link href={action.href}>
+                  <div className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow cursor-pointer">
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg ${action.color}`}>
+                        <action.icon className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-900">{action.title}</h3>
+                        <p className="text-sm text-gray-500 mt-1">{action.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              </PermissionGuard>
+            ))}
           </div>
         </div>
 
-        {/* Activity */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl p-6 border shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Недавняя активность</h2>
-              <Activity className="h-5 w-5 text-gray-400" />
-            </div>
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <Activity className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Обновление проекта</p>
-                    <p className="text-xs text-gray-500">2 часа назад</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Recent Activity */}
+        <div className="bg-white rounded-lg border">
+          <div className="p-6 border-b">
+            <h2 className="text-lg font-semibold text-gray-900">Последняя активность</h2>
           </div>
-
-          <div className="bg-white rounded-xl p-6 border shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Предстоящие события</h2>
-              <Calendar className="h-5 w-5 text-gray-400" />
-            </div>
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                  <div className="p-2 bg-green-50 rounded-lg">
-                    <Calendar className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">Встреча с командой</p>
-                    <p className="text-xs text-gray-500">Завтра в 14:00</p>
-                  </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">Система запущена и работает</p>
+                  <p className="text-xs text-gray-500">Только что</p>
                 </div>
-              ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">База данных подключена</p>
+                  <p className="text-xs text-gray-500">Несколько секунд назад</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">Все API endpoints активны</p>
+                  <p className="text-xs text-gray-500">Несколько секунд назад</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
