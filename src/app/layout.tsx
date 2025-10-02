@@ -6,7 +6,7 @@ import { Providers } from './providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Project Portal - Управление проектами',
+  title: 'Manexa - Управление проектами',
   description: 'SaaS портал для управления проектами и объектами',
 }
 

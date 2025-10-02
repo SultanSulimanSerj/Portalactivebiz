@@ -57,30 +57,72 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt"
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // При первом входе сохраняем данные пользователя
       if (user) {
+        token.name = user.name
         token.role = user.role
         token.companyId = user.companyId
         token.company = user.company
         token.phone = user.phone
         token.address = user.address
       }
+
+      // При обновлении сессии (trigger === 'update') подтягиваем свежие данные из БД
+      if (trigger === 'update' && token.sub) {
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          include: {
+            company: true // Загружаем полную информацию о компании с реквизитами
+          }
+        })
+
+        if (updatedUser) {
+          token.name = updatedUser.name
+          token.phone = updatedUser.phone
+          token.address = updatedUser.address
+          token.role = updatedUser.role
+          token.companyId = updatedUser.companyId
+          token.company = updatedUser.company
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.sub!
+        session.user.name = token.name as string
         session.user.role = token.role as string
         session.user.companyId = token.companyId as string
         session.user.company = token.company as any
         session.user.phone = token.phone as string
         session.user.address = token.address as string
+
+        // Добавляем реквизиты компании в сессию для использования в шаблонах
+        if (token.company && typeof token.company === 'object') {
+          session.user.company = {
+            ...token.company,
+            // Реквизиты теперь доступны в сессии
+            inn: token.company.inn,
+            legalName: token.company.legalName,
+            directorName: token.company.directorName,
+            directorPosition: token.company.directorPosition,
+            contactEmail: token.company.contactEmail,
+            contactPhone: token.company.contactPhone,
+            bankAccount: token.company.bankAccount,
+            bankName: token.company.bankName,
+            bankBik: token.company.bankBik,
+            correspondentAccount: token.company.correspondentAccount,
+            legalAddress: token.company.legalAddress,
+            actualAddress: token.company.actualAddress
+          }
+        }
       }
       return session
     }
   },
   pages: {
-    signIn: "/auth/signin",
-    signUp: "/auth/signup"
+    signIn: "/auth/signin"
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(
   request: NextRequest,
@@ -53,9 +54,11 @@ export async function POST(
 
     const message = await prisma.chatMessage.create({
       data: {
+        id: generateId(),
         content: content.trim(),
         projectId: params.id,
-        userId: user.id
+        userId: user.id,
+        updatedAt: new Date()
       },
       include: {
         user: {

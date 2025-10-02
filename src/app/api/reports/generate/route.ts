@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         const finances = await prisma.finance.findMany({
           where: {
             project: {
-              companyId: user.companyId
+              companyId: user.companyId!
             }
           },
           include: {
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
           'Тип операции': f.type === 'INCOME' ? 'Доход' : 'Расход',
           'Категория': f.category,
           'Описание': f.description || 'Без описания',
-          'Сумма (₽)': f.amount.toLocaleString('ru-RU'),
+          'Сумма (₽)': Number(f.amount).toLocaleString('ru-RU'),
           'Дата операции': new Date(f.date).toLocaleDateString('ru-RU'),
           'Проект': f.project.name,
           'ID записи': f.id
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       case 'projects':
         const projects = await prisma.project.findMany({
           where: {
-            companyId: user.companyId
+            companyId: user.companyId!
           },
           include: {
             _count: {
@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
           'Описание': p.description || 'Без описания',
           'Статус': p.status,
           'Приоритет': p.priority,
-          'Бюджет (₽)': (p.budget || 0).toLocaleString('ru-RU'),
-          'Фактические затраты (₽)': (p.actualCost || 0).toLocaleString('ru-RU'),
-          'Остаток бюджета (₽)': ((p.budget || 0) - (p.actualCost || 0)).toLocaleString('ru-RU'),
+          'Бюджет (₽)': Number(p.budget || 0).toLocaleString('ru-RU'),
+          'Фактические затраты (₽)': Number(p.actualCost || 0).toLocaleString('ru-RU'),
+          'Остаток бюджета (₽)': (Number(p.budget || 0) - Number(p.actualCost || 0)).toLocaleString('ru-RU'),
           'Количество задач': p._count.tasks,
           'Количество документов': p._count.documents,
           'Дата создания': new Date(p.createdAt).toLocaleDateString('ru-RU'),
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         const documents = await prisma.document.findMany({
           where: {
             project: {
-              companyId: user.companyId
+              companyId: user.companyId!
             }
           },
           include: {
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
           'Тип файла': d.mimeType,
           'Версия документа': d.version,
           'Номер документа': d.documentNumber || 'Не присвоен',
-          'Проект': d.project.name,
+          'Проект': d.project?.name || 'Без проекта',
           'Создатель': d.creator.name || 'Неизвестно',
           'Дата создания': new Date(d.createdAt).toLocaleDateString('ru-RU'),
           'ID документа': d.id
@@ -165,13 +165,13 @@ export async function POST(request: NextRequest) {
     const worksheet = XLSX.utils.json_to_sheet(fullReportData)
     
     // Настраиваем ширину колонок
-    const colWidths = []
+    const colWidths: number[] = []
     if (fullReportData.length > 0) {
       const headers = Object.keys(fullReportData[0])
       headers.forEach((header, index) => {
         const maxLength = Math.max(
           header.length,
-          ...fullReportData.map(row => String(row[header] || '').length)
+          ...fullReportData.map(row => String((row as any)[header] || '').length)
         )
         colWidths[index] = Math.min(Math.max(maxLength + 2, 10), 50)
       })

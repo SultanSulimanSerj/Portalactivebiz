@@ -5,7 +5,7 @@ import { CheckCircle, XCircle, Clock, User } from 'lucide-react'
 interface ApprovalProgressProps {
   assignments: Array<{
     id: string
-    user: { name: string; email: string }
+    user: { id: string; name: string; email: string }
     status: string
     role: string
     comment: string | null

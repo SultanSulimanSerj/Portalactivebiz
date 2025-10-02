@@ -23,7 +23,8 @@ export async function PUT(
         ...(description !== undefined && { description: description || null }),
         ...(amount && { amount: parseFloat(amount) }),
         ...(date && { date: new Date(date) }),
-        ...(projectId !== undefined && { projectId: projectId || null })
+        ...(projectId !== undefined && { projectId: projectId || null }),
+        updatedAt: new Date()
       },
       include: {
         project: {

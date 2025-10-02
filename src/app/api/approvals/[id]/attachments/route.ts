@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { uploadFile } from '@/lib/storage'
+import { generateId } from '@/lib/id-generator'
 
 // GET /api/approvals/[id]/attachments - Получить все вложения согласования
 export async function GET(
@@ -60,6 +61,7 @@ export async function POST(
     // Сохраняем информацию о вложении в БД
     const attachment = await prisma.approvalAttachment.create({
       data: {
+        id: generateId(),
         fileName: file.name,
         filePath,
         fileSize: file.size,
@@ -77,6 +79,7 @@ export async function POST(
     // Добавляем запись в историю
     await prisma.approvalHistory.create({
       data: {
+        id: generateId(),
         action: 'file_attached',
         changes: {
           fileName: file.name,

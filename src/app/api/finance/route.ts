@@ -7,6 +7,7 @@ import { performanceMonitor } from '@/lib/monitoring'
 import { createErrorAlert } from '@/lib/alerts'
 import { notifyFinancialUpdate } from '@/lib/notifications'
 import { UserRole } from '@/lib/permissions'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
@@ -57,9 +58,9 @@ export async function GET(request: NextRequest) {
       // Никаких дополнительных ограничений
     } else {
       // MANAGER и USER видят только финансовые записи проектов, где являются участниками
-      where.project.OR = [
+      where.Project.OR = [
         { creatorId: user.id }, // Пользователь создал проект
-        { users: { some: { userId: user.id } } } // Пользователь является участником проекта
+        { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
       ]
     }
 
@@ -151,13 +152,15 @@ export async function POST(request: NextRequest) {
 
     const finance = await prisma.finance.create({
       data: {
+        id: generateId(),
         type,
         category: category || 'Other',
         description: description || null,
         amount: parseFloat(amount),
         date: date ? new Date(date) : new Date(),
         projectId: projectId || '1', // Используем projectId напрямую
-        creatorId: user.id // Используем creatorId напрямую
+        creatorId: user.id, // Используем creatorId напрямую
+        updatedAt: new Date()
       },
       include: {
         project: {

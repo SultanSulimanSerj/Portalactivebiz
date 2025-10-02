@@ -10,15 +10,27 @@ export async function PUT(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canEditUsers')
     
-    if (!allowed) {
+    if (!user) {
+      return NextResponse.json({ error: 'Пользователь не найден' }, { status: 401 })
+    }
+    
+    // Пользователь может редактировать только свой профиль (без изменения роли)
+    const isSelfEdit = params.id === user.id
+    
+    if (!allowed && !isSelfEdit) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { name, email, role, position, password } = body
+    const { name, email, role, position, password, phone, address } = body
 
-    // Проверяем права на изменение роли
-    if (role && role !== user.role) {
+    // Пользователь не может изменять свою роль
+    if (isSelfEdit && role && role !== user.role) {
+      return NextResponse.json({ error: 'Нельзя изменять свою роль' }, { status: 403 })
+    }
+
+    // Проверяем права на изменение роли других пользователей
+    if (!isSelfEdit && role && role !== user.role) {
       if (role === UserRole.OWNER && user.role !== UserRole.OWNER) {
         return NextResponse.json({ error: 'Недостаточно прав для изменения роли на владельца' }, { status: 403 })
       }
@@ -34,8 +46,11 @@ export async function PUT(
     const updateData: any = {
       ...(name && { name }),
       ...(email && { email }),
-      ...(role && { role }),
-      ...(position !== undefined && { position })
+      ...(phone !== undefined && { phone }),
+      ...(address !== undefined && { address }),
+      ...(!isSelfEdit && role && { role }),
+      ...(position !== undefined && { position }),
+      updatedAt: new Date()
     }
 
     // Only update password if provided
@@ -53,6 +68,8 @@ export async function PUT(
         email: true,
         role: true,
         position: true,
+        phone: true,
+        address: true,
         createdAt: true,
         _count: {
           select: {
@@ -77,7 +94,7 @@ export async function DELETE(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canDeleteUsers')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 

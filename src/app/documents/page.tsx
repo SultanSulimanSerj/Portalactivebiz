@@ -16,13 +16,13 @@ interface Document {
   mimeType: string
   version: number
   createdAt: string
-  project: { name: string } | null
-  creator: { name: string }
+  Project: { id: string; name: string } | null
+  User: { id: string; name: string; email: string }
 }
 
 export default function DocumentsPage() {
   const searchParams = useSearchParams()
-  const projectIdFromUrl = searchParams.get('projectId')
+  const projectIdFromUrl = searchParams?.get('projectId')
   
   const [documents, setDocuments] = useState<Document[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -176,7 +176,7 @@ export default function DocumentsPage() {
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesProject = !projectIdFromUrl || doc.project?.name === currentProject?.name
+    const matchesProject = !projectIdFromUrl || doc.Project?.name === currentProject?.name
     return matchesSearch && matchesProject
   })
 
@@ -275,7 +275,16 @@ export default function DocumentsPage() {
                       <div className="text-sm text-gray-700">{formatFileSize(doc.fileSize)}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm text-gray-900">{doc.project?.name || '—'}</div>
+                      {doc.Project ? (
+                        <Link 
+                          href={`/projects/${doc.Project.id}`}
+                          className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                        >
+                          {doc.Project.name}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-gray-500">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-gray-700">

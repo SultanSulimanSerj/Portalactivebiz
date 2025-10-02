@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canManageUsers')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     const where = {
       companyId: user.companyId,
-      ...(role && { role })
+      ...(role && { role: role as any })
     }
 
     const [users, total] = await Promise.all([
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canCreateUsers')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 

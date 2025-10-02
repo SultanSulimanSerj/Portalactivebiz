@@ -18,7 +18,22 @@ interface ProjectDetail {
   endDate: string | null
   creator: { name: string }
   users: Array<{ user: { id: string; name: string } }>
-  _count: { tasks: number; documents: number }
+  _count: { tasks: number; documents: number; users: number }
+  // Реквизиты клиента
+  clientName?: string
+  clientLegalName?: string
+  clientInn?: string
+  clientKpp?: string
+  clientOgrn?: string
+  clientLegalAddress?: string
+  clientActualAddress?: string
+  clientDirectorName?: string
+  clientContactPhone?: string
+  clientContactEmail?: string
+  clientBankAccount?: string
+  clientBankName?: string
+  clientBankBik?: string
+  clientCorrespondentAccount?: string
 }
 
 interface Message {
@@ -67,18 +82,20 @@ export default function ProjectDetailPage() {
   const [membersLoading, setMembersLoading] = useState(false)
   const [showContactModal, setShowContactModal] = useState(false)
   const [selectedMember, setSelectedMember] = useState<User | null>(null)
+  const [estimatesTotal, setEstimatesTotal] = useState<number>(0)
 
   useEffect(() => {
-    if (params.id) {
+    if (params?.id) {
       fetchProject()
       fetchMessages()
       fetchFinanceStats()
+      fetchEstimatesTotal()
     }
-  }, [params.id])
+  }, [params?.id])
 
   const fetchProject = async () => {
     try {
-      const response = await fetch(`/api/projects/${params.id}`, {
+      const response = await fetch(`/api/projects/${params?.id}`, {
       })
       if (response.ok) {
         const data = await response.json()
@@ -97,7 +114,7 @@ export default function ProjectDetailPage() {
 
   const fetchMessages = async () => {
     try {
-      const response = await fetch(`/api/projects/${params.id}/messages`, {
+      const response = await fetch(`/api/projects/${params?.id}/messages`, {
       })
       if (response.ok) {
         const data = await response.json()
@@ -110,7 +127,7 @@ export default function ProjectDetailPage() {
 
   const fetchFinanceStats = async () => {
     try {
-      const response = await fetch(`/api/finance?projectId=${params.id}`, {
+      const response = await fetch(`/api/finance?projectId=${params?.id}`, {
       })
       if (response.ok) {
         const data = await response.json()
@@ -133,6 +150,21 @@ export default function ProjectDetailPage() {
     }
   }
 
+  const fetchEstimatesTotal = async () => {
+    try {
+      const response = await fetch(`/api/projects/${params?.id}/estimates`)
+      if (response.ok) {
+        const estimates = await response.json()
+        const total = estimates.reduce((sum: number, estimate: any) => {
+          return sum + Number(estimate.totalWithVat || estimate.total || 0)
+        }, 0)
+        setEstimatesTotal(total)
+      }
+    } catch (error) {
+      console.error('Error fetching estimates total:', error)
+    }
+  }
+
   const fetchAvailableUsers = async () => {
     try {
       const response = await fetch('/api/users')
@@ -150,7 +182,7 @@ export default function ProjectDetailPage() {
     
     setMembersLoading(true)
     try {
-      const response = await fetch(`/api/projects/${params.id}/members`, {
+      const response = await fetch(`/api/projects/${params?.id}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: selectedUserId })
@@ -182,7 +214,7 @@ export default function ProjectDetailPage() {
     if (!confirm('Удалить участника из проекта?')) return
     
     try {
-      const response = await fetch(`/api/projects/${params.id}/members?userId=${userId}`, {
+      const response = await fetch(`/api/projects/${params?.id}/members?userId=${userId}`, {
         method: 'DELETE'
       })
       
@@ -221,7 +253,7 @@ export default function ProjectDetailPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await fetch(`/api/projects/${params.id}`, {
+      const response = await fetch(`/api/projects/${params?.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -248,7 +280,7 @@ export default function ProjectDetailPage() {
     if (!newMessage.trim()) return
 
     try {
-      const response = await fetch(`/api/projects/${params.id}/messages`, {
+      const response = await fetch(`/api/projects/${params?.id}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -270,7 +302,7 @@ export default function ProjectDetailPage() {
   const getStatusText = (status: string) => {
     const statusMap: { [key: string]: string } = {
       'PLANNING': 'Планирование',
-      'IN_PROGRESS': 'В работе',
+      'ACTIVE': 'Активный',
       'COMPLETED': 'Завершен',
       'ON_HOLD': 'Приостановлен',
       'CANCELLED': 'Отменен'
@@ -280,11 +312,11 @@ export default function ProjectDetailPage() {
 
   const getStatusColor = (status: string) => {
     const colorMap: { [key: string]: string } = {
-      'PLANNING': 'bg-blue-100 text-blue-800',
-      'IN_PROGRESS': 'bg-green-100 text-green-800',
-      'COMPLETED': 'bg-gray-100 text-gray-800',
-      'ON_HOLD': 'bg-yellow-100 text-yellow-800',
-      'CANCELLED': 'bg-red-100 text-red-800'
+      'PLANNING': 'bg-blue-100 text-blue-800 border-blue-200',
+      'ACTIVE': 'bg-green-100 text-green-800 border-green-200',
+      'COMPLETED': 'bg-gray-100 text-gray-800 border-gray-200',
+      'ON_HOLD': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'CANCELLED': 'bg-red-100 text-red-800 border-red-200'
     }
     return colorMap[status] || 'bg-gray-100 text-gray-800'
   }
@@ -364,7 +396,7 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Link 
             href={`/tasks?projectId=${project.id}`}
             className="bg-white rounded-lg p-5 border hover:shadow-md transition-shadow"
@@ -406,22 +438,41 @@ export default function ProjectDetailPage() {
             <p className="text-xs text-gray-600">Бюджет →</p>
           </Link>
 
-          <div className="bg-white rounded-lg p-5 border">
+          <Link 
+            href={`/projects/${project.id}/estimate`}
+            className="bg-white rounded-lg p-5 border hover:shadow-md transition-shadow"
+          >
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <Users className="h-5 w-5 text-orange-600" />
+              <div className="p-2 bg-indigo-50 rounded-lg">
+                <FileText className="h-5 w-5 text-indigo-600" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{project._count.users}</p>
-            <p className="text-xs text-gray-600">Участников</p>
-          </div>
+            <p className="text-2xl font-bold text-gray-900">
+              {estimatesTotal > 0 ? `${estimatesTotal.toLocaleString('ru-RU')} ₽` : '—'}
+            </p>
+            <p className="text-xs text-gray-600">Смета →</p>
+          </Link>
+
+
+          <Link 
+            href={`/documents/generate?projectId=${project.id}`}
+            className="bg-white rounded-lg p-5 border hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <FileText className="h-5 w-5 text-blue-600" />
+              </div>
+            </div>
+            <p className="text-sm font-medium text-blue-600">Создать договор</p>
+            <p className="text-xs text-gray-600">Генерация документа →</p>
+          </Link>
         </div>
 
         {/* Financial Stats */}
         {financeStats && (
           <div className="bg-white rounded-lg border p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Финансовая статистика</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <TrendingUp className="h-4 w-4 text-green-600" />
@@ -515,6 +566,48 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-gray-900">{project.description}</p>
             </div>
           )}
+
+          {/* Реквизиты клиента */}
+          {project.clientName && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm text-gray-500">Реквизиты клиента</p>
+                <Link
+                  href={`/projects/${project.id}/client-requisites`}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  Редактировать
+                </Link>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{project.clientName}</p>
+                    {project.clientLegalName && (
+                      <p className="text-xs text-gray-600 mt-1">{project.clientLegalName}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {project.clientInn && (
+                      <p className="text-xs text-gray-600">ИНН: {project.clientInn}</p>
+                    )}
+                    {project.clientKpp && (
+                      <p className="text-xs text-gray-600">КПП: {project.clientKpp}</p>
+                    )}
+                  </div>
+                </div>
+                {project.clientLegalAddress && (
+                  <p className="text-xs text-gray-600 mt-2">Адрес: {project.clientLegalAddress}</p>
+                )}
+                {project.clientContactPhone && (
+                  <p className="text-xs text-gray-600">Телефон: {project.clientContactPhone}</p>
+                )}
+                {project.clientContactEmail && (
+                  <p className="text-xs text-gray-600">Email: {project.clientContactEmail}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Team */}
@@ -554,16 +647,12 @@ export default function ProjectDetailPage() {
                       onClick={() => handleShowContact(member)}
                       title="Показать контакты"
                     >
-                      {member.user.name}
-                    </span>
-                    {member.user.position && (
-                      <span className="text-xs text-gray-500">({member.user.position})</span>
-                    )}
+                    {member.user.name}
+                  </span>
                     <PermissionButton
                       permission="canManageProjectMembers"
                       onClick={() => handleRemoveMember(member.user.id)}
                       className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                      title="Удалить участника"
                     >
                       <UserMinus className="h-3 w-3" />
                     </PermissionButton>
@@ -675,7 +764,7 @@ export default function ProjectDetailPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="PLANNING">Планирование</option>
-                      <option value="IN_PROGRESS">В работе</option>
+                      <option value="ACTIVE">Активный</option>
                       <option value="COMPLETED">Завершен</option>
                       <option value="ON_HOLD">Приостановлен</option>
                       <option value="CANCELLED">Отменен</option>

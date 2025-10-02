@@ -14,7 +14,7 @@ export async function createNotification(data: CreateNotificationData) {
       userId: data.userId,
       title: data.title,
       message: data.message,
-      type: data.type,
+      type: data.type.toUpperCase() as any,
       projectId: data.projectId
     }
   })
@@ -40,7 +40,7 @@ export async function createProjectNotification(
           userId: user.userId,
           title,
           message,
-          type,
+          type: type.toUpperCase() as any,
           projectId
         }
       })
@@ -69,7 +69,7 @@ export async function createSystemNotification(
           userId: user.id,
           title,
           message,
-          type
+          type: type.toUpperCase() as any
         }
       })
     )

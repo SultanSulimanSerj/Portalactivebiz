@@ -740,7 +740,7 @@ export default function ApprovalsPage() {
                                   setCreateForm({
                                     ...createForm,
                                     assigneeIds: createForm.assigneeIds.filter(id => id !== user.id),
-                                    roles: { ...createForm.roles, [user.id]: undefined }
+                                    roles: { ...createForm.roles, [user.id]: undefined } as Record<string, string>
                                   })
                                 }
                               }}

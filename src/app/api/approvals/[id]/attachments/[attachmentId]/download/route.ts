@@ -20,9 +20,7 @@ export async function GET(
     const approval = await prisma.approval.findFirst({
       where: {
         id: approvalId,
-        creator: {
-          companyId: user.companyId
-        }
+        creatorId: user.id
       }
     })
 

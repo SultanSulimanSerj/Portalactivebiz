@@ -14,11 +14,27 @@ interface Project {
   budget: number | null
   startDate: string | null
   endDate: string | null
-  creator: { name: string | null }
-  users: Array<{ user: { id: string; name: string | null } }>
-  _count: { tasks: number; documents: number; users: number }
+  User: { name: string | null }
+  ProjectUser: Array<{ User: { id: string; name: string | null } }>
+  _count: { Task: number; Document: number; ProjectUser: number }
+  // Реквизиты клиента
+  clientName?: string | null
+  clientLegalName?: string | null
+  clientInn?: string | null
+  clientKpp?: string | null
+  clientOgrn?: string | null
+  clientLegalAddress?: string | null
+  clientActualAddress?: string | null
+  clientDirectorName?: string | null
+  clientContactPhone?: string | null
+  clientContactEmail?: string | null
+  clientBankAccount?: string | null
+  clientBankName?: string | null
+  clientBankBik?: string | null
+  clientCorrespondentAccount?: string | null
   financialSummary?: {
     income: number
+    plannedIncome: number
     expenses: number
     profit: number
     margin: number
@@ -32,6 +48,7 @@ export default function ProjectsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [showClientRequisites, setShowClientRequisites] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -39,7 +56,22 @@ export default function ProjectsPage() {
     priority: 'MEDIUM',
     budget: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    // Реквизиты клиента
+    clientName: '',
+    clientLegalName: '',
+    clientInn: '',
+    clientKpp: '',
+    clientOgrn: '',
+    clientLegalAddress: '',
+    clientActualAddress: '',
+    clientDirectorName: '',
+    clientContactPhone: '',
+    clientContactEmail: '',
+    clientBankAccount: '',
+    clientBankName: '',
+    clientBankBik: '',
+    clientCorrespondentAccount: ''
   })
 
   useEffect(() => {
@@ -63,6 +95,7 @@ export default function ProjectsPage() {
 
   const handleCreate = () => {
     setEditingProject(null)
+    setShowClientRequisites(false)
     setFormData({
       name: '',
       description: '',
@@ -70,13 +103,29 @@ export default function ProjectsPage() {
       priority: 'MEDIUM',
       budget: '',
       startDate: '',
-      endDate: ''
+      endDate: '',
+      // Реквизиты клиента
+      clientName: '',
+      clientLegalName: '',
+      clientInn: '',
+      clientKpp: '',
+      clientOgrn: '',
+      clientLegalAddress: '',
+      clientActualAddress: '',
+      clientDirectorName: '',
+      clientContactPhone: '',
+      clientContactEmail: '',
+      clientBankAccount: '',
+      clientBankName: '',
+      clientBankBik: '',
+      clientCorrespondentAccount: ''
     })
     setShowModal(true)
   }
 
   const handleEdit = (project: Project) => {
     setEditingProject(project)
+    setShowClientRequisites(true) // При редактировании показываем реквизиты клиента
     setFormData({
       name: project.name,
       description: project.description || '',
@@ -84,7 +133,21 @@ export default function ProjectsPage() {
       priority: project.priority,
       budget: project.budget?.toString() || '',
       startDate: project.startDate?.split('T')[0] || '',
-      endDate: project.endDate?.split('T')[0] || ''
+      endDate: project.endDate?.split('T')[0] || '',
+      clientName: project.clientName || '',
+      clientLegalName: project.clientLegalName || '',
+      clientInn: project.clientInn || '',
+      clientKpp: project.clientKpp || '',
+      clientOgrn: project.clientOgrn || '',
+      clientLegalAddress: project.clientLegalAddress || '',
+      clientActualAddress: project.clientActualAddress || '',
+      clientDirectorName: project.clientDirectorName || '',
+      clientContactPhone: project.clientContactPhone || '',
+      clientContactEmail: project.clientContactEmail || '',
+      clientBankAccount: project.clientBankAccount || '',
+      clientBankName: project.clientBankName || '',
+      clientBankBik: project.clientBankBik || '',
+      clientCorrespondentAccount: project.clientCorrespondentAccount || ''
     })
     setShowModal(true)
   }
@@ -233,10 +296,10 @@ export default function ProjectsPage() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Проект</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">План. доход</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Доходы</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Расходы</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Прибыль</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Маржа %</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Задачи</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Команда</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
@@ -269,13 +332,18 @@ export default function ProjectsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
+                        <div className="text-sm font-medium text-blue-600">
+                          {fs && fs.plannedIncome > 0 ? `${fs.plannedIncome.toLocaleString()}` : '—'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
                         <div className="text-sm font-medium text-green-600">
-                          {fs ? `+${fs.income.toLocaleString()}` : '—'}
+                          {fs && fs.income > 0 ? `+${fs.income.toLocaleString()}` : '—'}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="text-sm font-medium text-red-600">
-                          {fs ? `-${fs.expenses.toLocaleString()}` : '—'}
+                          {fs && fs.expenses > 0 ? `-${fs.expenses.toLocaleString()}` : '—'}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -283,18 +351,13 @@ export default function ProjectsPage() {
                           {fs ? fs.profit.toLocaleString() : '—'}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className={`text-sm font-semibold ${fs && fs.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {fs ? `${fs.margin}%` : '—'}
-                        </div>
-                      </td>
                       <td className="px-4 py-3 text-center">
-                        <div className="text-sm text-gray-900">{project._count.tasks}</div>
+                        <div className="text-sm text-gray-900">{project._count.Task}</div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Users className="h-3 w-3 text-gray-400" />
-                          <span className="text-sm text-gray-900">{project._count.users}</span>
+                          <span className="text-sm text-gray-900">{project._count.ProjectUser}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -421,6 +484,205 @@ export default function ProjectsPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                </div>
+
+                {/* Реквизиты клиента */}
+                <div className="border-t pt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowClientRequisites(!showClientRequisites)}
+                    className="flex items-center justify-between w-full text-left mb-4 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Реквизиты клиента</h3>
+                      <p className="text-sm text-gray-500">Дополнительная информация о клиенте (необязательно)</p>
+                    </div>
+                    <div className="flex items-center">
+                      {showClientRequisites ? (
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </div>
+                  </button>
+                  
+                  {showClientRequisites && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Название клиента</label>
+                      <input
+                        type="text"
+                        value={formData.clientName}
+                        onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="ООО 'Название компании'"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Полное юридическое наименование</label>
+                      <input
+                        type="text"
+                        value={formData.clientLegalName}
+                        onChange={(e) => setFormData({...formData, clientLegalName: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Общество с ограниченной ответственностью..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">ИНН</label>
+                      <input
+                        type="text"
+                        value={formData.clientInn}
+                        onChange={(e) => setFormData({...formData, clientInn: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="1234567890"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">КПП</label>
+                      <input
+                        type="text"
+                        value={formData.clientKpp}
+                        onChange={(e) => setFormData({...formData, clientKpp: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="123456789"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">ОГРН</label>
+                      <input
+                        type="text"
+                        value={formData.clientOgrn}
+                        onChange={(e) => setFormData({...formData, clientOgrn: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="1234567890123"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Юридический адрес</label>
+                      <textarea
+                        value={formData.clientLegalAddress}
+                        onChange={(e) => setFormData({...formData, clientLegalAddress: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={2}
+                        placeholder="г. Москва, ул. Примерная, д. 1, офис 101"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Фактический адрес</label>
+                      <textarea
+                        value={formData.clientActualAddress}
+                        onChange={(e) => setFormData({...formData, clientActualAddress: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        rows={2}
+                        placeholder="г. Москва, ул. Фактическая, д. 2, офис 201"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">ФИО директора</label>
+                      <input
+                        type="text"
+                        value={formData.clientDirectorName}
+                        onChange={(e) => setFormData({...formData, clientDirectorName: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Иванов Иван Иванович"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                      <input
+                        type="text"
+                        value={formData.clientContactPhone}
+                        onChange={(e) => setFormData({...formData, clientContactPhone: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="+7 (495) 123-45-67"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                    <input
+                      type="email"
+                      value={formData.clientContactEmail}
+                      onChange={(e) => setFormData({...formData, clientContactEmail: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="info@company.ru"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Расчетный счет</label>
+                      <input
+                        type="text"
+                        value={formData.clientBankAccount}
+                        onChange={(e) => setFormData({...formData, clientBankAccount: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="40702810000000000001"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Наименование банка</label>
+                      <input
+                        type="text"
+                        value={formData.clientBankName}
+                        onChange={(e) => setFormData({...formData, clientBankName: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="ПАО СБЕРБАНК"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">БИК банка</label>
+                      <input
+                        type="text"
+                        value={formData.clientBankBik}
+                        onChange={(e) => setFormData({...formData, clientBankBik: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="044525225"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Корреспондентский счет</label>
+                      <input
+                        type="text"
+                        value={formData.clientCorrespondentAccount}
+                        onChange={(e) => setFormData({...formData, clientCorrespondentAccount: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="30101810000000000225"
+                      />
+                    </div>
+                  </div>
+
+                      <p className="text-xs text-gray-500 mt-4">
+                        💡 Эти данные будут автоматически использоваться в договорах, сметах и других документах проекта
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-3 pt-4">

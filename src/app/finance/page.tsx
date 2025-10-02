@@ -18,7 +18,7 @@ interface FinanceRecord {
 
 export default function FinancePage() {
   const searchParams = useSearchParams()
-  const projectIdFromUrl = searchParams.get('projectId')
+  const projectIdFromUrl = searchParams?.get('projectId')
   
   const [records, setRecords] = useState<FinanceRecord[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -141,6 +141,7 @@ export default function FinancePage() {
     : projectFilteredRecords.filter(r => r.type === filterType)
   
   const totalIncome = projectFilteredRecords.filter(r => r.type === 'INCOME').reduce((sum, r) => sum + Number(r.amount), 0)
+  const totalPlannedIncome = projectFilteredRecords.filter(r => r.type === 'PLANNED_INCOME').reduce((sum, r) => sum + Number(r.amount), 0)
   const totalExpenses = projectFilteredRecords.filter(r => r.type === 'EXPENSE').reduce((sum, r) => sum + Number(r.amount), 0)
   const balance = totalIncome - totalExpenses
   const margin = totalIncome > 0 ? ((balance / totalIncome) * 100) : 0
@@ -189,61 +190,48 @@ export default function FinancePage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white rounded-lg p-5 border">
+        <div className="grid grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg p-5 border border-blue-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <DollarSign className="h-5 w-5 text-blue-600" />
+              </div>
+              <p className="text-sm text-gray-600">План. доход</p>
+            </div>
+            <p className="text-2xl font-bold text-blue-600">{totalPlannedIncome.toLocaleString()} ₽</p>
+          </div>
+
+          <div className="bg-white rounded-lg p-5 border border-green-200">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-green-50 rounded-lg">
                 <TrendingUp className="h-5 w-5 text-green-600" />
               </div>
               <p className="text-sm text-gray-600">Доходы</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{totalIncome.toLocaleString()} ₽</p>
+            <p className="text-2xl font-bold text-green-600">{totalIncome.toLocaleString()} ₽</p>
           </div>
 
-          <div className="bg-white rounded-lg p-5 border">
+          <div className="bg-white rounded-lg p-5 border border-red-200">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-red-50 rounded-lg">
                 <TrendingDown className="h-5 w-5 text-red-600" />
               </div>
               <p className="text-sm text-gray-600">Расходы</p>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{totalExpenses.toLocaleString()} ₽</p>
+            <p className="text-2xl font-bold text-red-600">{totalExpenses.toLocaleString()} ₽</p>
           </div>
 
           <div className={`bg-white rounded-lg p-5 border ${balance >= 0 ? 'border-green-200' : 'border-red-200'}`}>
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <DollarSign className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-purple-50 rounded-lg">
+                <Percent className="h-5 w-5 text-purple-600" />
               </div>
               <p className="text-sm text-gray-600">Прибыль</p>
             </div>
             <p className={`text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {balance.toLocaleString()} ₽
             </p>
-          </div>
-
-          <div className={`bg-white rounded-lg p-5 border ${margin >= 0 ? 'border-green-200' : 'border-red-200'}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <Percent className="h-5 w-5 text-purple-600" />
-              </div>
-              <p className="text-sm text-gray-600">Маржа</p>
-            </div>
-            <p className={`text-2xl font-bold ${margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {margin.toFixed(1)}%
-            </p>
-          </div>
-
-          <div className="bg-white rounded-lg p-5 border">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-gray-50 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-gray-600" />
-              </div>
-              <p className="text-sm text-gray-600">Рентабельность</p>
-            </div>
-            <p className={`text-2xl font-bold ${margin >= 10 ? 'text-green-600' : margin >= 0 ? 'text-yellow-600' : 'text-red-600'}`}>
-              {margin >= 10 ? 'Отличная' : margin >= 0 ? 'Хорошая' : 'Убыточная'}
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Маржа: {margin.toFixed(1)}%</p>
           </div>
         </div>
 
@@ -266,6 +254,14 @@ export default function FinancePage() {
               }`}
             >
               Доходы
+            </button>
+            <button
+              onClick={() => setFilterType('PLANNED_INCOME')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                filterType === 'PLANNED_INCOME' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Планируемый доход
             </button>
             <button
               onClick={() => setFilterType('EXPENSE')}
@@ -301,6 +297,10 @@ export default function FinancePage() {
                           <div className="p-1.5 bg-green-50 rounded">
                             <TrendingUp className="h-4 w-4 text-green-600" />
                           </div>
+                        ) : record.type === 'PLANNED_INCOME' ? (
+                          <div className="p-1.5 bg-blue-50 rounded">
+                            <DollarSign className="h-4 w-4 text-blue-600" />
+                          </div>
                         ) : (
                           <div className="p-1.5 bg-red-50 rounded">
                             <TrendingDown className="h-4 w-4 text-red-600" />
@@ -324,9 +324,11 @@ export default function FinancePage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className={`text-sm font-bold ${
-                        record.type === 'INCOME' ? 'text-green-600' : 'text-red-600'
+                        record.type === 'INCOME' ? 'text-green-600' : 
+                        record.type === 'PLANNED_INCOME' ? 'text-blue-600' : 
+                        'text-red-600'
                       }`}>
-                        {record.type === 'INCOME' ? '+' : '-'}{Number(record.amount).toLocaleString()} ₽
+                        {record.type === 'EXPENSE' ? '-' : '+'}{Number(record.amount).toLocaleString()} ₽
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">

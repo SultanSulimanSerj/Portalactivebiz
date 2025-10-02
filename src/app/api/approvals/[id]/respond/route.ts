@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
-import { notifyApprovalResponse, notifyApprovalCompleted } from '@/lib/notifications'
+import { generateId } from '@/lib/id-generator'
 
 // POST /api/approvals/[id]/respond - Ответить на согласование (одобрить/отклонить)
 export async function POST(
@@ -144,17 +144,21 @@ export async function POST(
         for (const attachment of attachments) {
           await prisma.document.create({
             data: {
+              id: generateId(),
               title: attachment.fileName,
               description: `Документ из согласования: ${approval.title}`,
               filePath: attachment.filePath,
               fileName: attachment.fileName,
               fileSize: attachment.fileSize,
               mimeType: attachment.mimeType,
+              version: 1,
+              documentNumber: `DOC-${Date.now()}`,
               projectId: approval.projectId,
               creatorId: user.id,
               isPublished: true,
               publishedAt: new Date(),
-              category: 'APPROVED_DOCUMENT'
+              category: 'LEGAL',
+              updatedAt: new Date()
             }
           })
         }
@@ -164,6 +168,7 @@ export async function POST(
     // Добавляем запись в историю
     await prisma.approvalHistory.create({
       data: {
+        id: generateId(),
         action: status === 'APPROVED' ? 'approved' : 'rejected',
         changes: {
           status,
@@ -174,20 +179,6 @@ export async function POST(
         userId: user.id
       }
     })
-
-    // Отправляем уведомления
-    try {
-      // Уведомление об ответе на согласование
-      await notifyApprovalResponse(params.id, user.id, status, comment)
-      
-      // Если согласование завершено, отправляем уведомление о завершении
-      if (newApprovalStatus === 'APPROVED' || newApprovalStatus === 'REJECTED') {
-        await notifyApprovalCompleted(params.id)
-      }
-    } catch (notificationError) {
-      console.error('Error sending notifications:', notificationError)
-      // Не прерываем выполнение, если уведомления не отправились
-    }
 
     return NextResponse.json(updatedApproval)
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(
   request: NextRequest,
@@ -66,6 +67,7 @@ export async function PUT(
       if (assigneeIds.length > 0) {
         await prisma.taskAssignment.createMany({
           data: assigneeIds.map((userId: string) => ({
+            id: generateId(),
             taskId: params.id,
             userId
           }))
@@ -82,7 +84,8 @@ export async function PUT(
         ...(priority && { priority }),
         ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
         ...(projectId !== undefined && { projectId: projectId || null }),
-        ...(status === 'COMPLETED' && { completedAt: new Date() })
+        ...(status === 'COMPLETED' && { completedAt: new Date() }),
+        updatedAt: new Date()
       },
       include: {
         project: {

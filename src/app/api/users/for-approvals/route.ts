@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canCreateApprovals')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 

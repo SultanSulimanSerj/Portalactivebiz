@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
-import { notifyNewComment } from '@/lib/notifications'
+import { generateId } from '@/lib/id-generator'
 
 // GET /api/approvals/[id]/comments - Получить все комментарии согласования
 export async function GET(
@@ -53,9 +53,11 @@ export async function POST(
 
     const comment = await prisma.approvalComment.create({
       data: {
+        id: generateId(),
         content,
         approvalId: params.id,
-        userId: user.id
+        userId: user.id,
+        updatedAt: new Date()
       },
       include: {
         user: {
@@ -67,6 +69,7 @@ export async function POST(
     // Добавляем запись в историю
     await prisma.approvalHistory.create({
       data: {
+        id: generateId(),
         action: 'commented',
         changes: {
           comment: content
@@ -75,14 +78,6 @@ export async function POST(
         userId: user.id
       }
     })
-
-    // Отправляем уведомления участникам
-    try {
-      await notifyNewComment(params.id, user.id, content)
-    } catch (notificationError) {
-      console.error('Error sending notifications:', notificationError)
-      // Не прерываем выполнение, если уведомления не отправились
-    }
 
     return NextResponse.json(comment, { status: 201 })
   } catch (error) {

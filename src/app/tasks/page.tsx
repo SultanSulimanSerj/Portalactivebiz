@@ -20,7 +20,7 @@ interface Task {
 
 export default function TasksPage() {
   const searchParams = useSearchParams()
-  const projectIdFromUrl = searchParams.get('projectId')
+  const projectIdFromUrl = searchParams?.get('projectId')
   
   const [tasks, setTasks] = useState<Task[]>([])
   const [projects, setProjects] = useState<any[]>([])
@@ -337,9 +337,16 @@ export default function TasksPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm text-gray-900">
-                        {task.project?.name || '—'}
-                      </div>
+                      {task.project ? (
+                        <Link 
+                          href={`/projects/${task.project.id}`}
+                          className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                        >
+                          {task.project.name}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-gray-500">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-sm text-gray-900">

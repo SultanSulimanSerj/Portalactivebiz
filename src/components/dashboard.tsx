@@ -13,8 +13,21 @@ import {
   TrendingUp,
   ArrowUpRight,
   Activity,
-  Calendar
+  Calendar,
+  MessageSquare
 } from 'lucide-react'
+
+interface ActivityItem {
+  id: string
+  type: string
+  action: string
+  title: string
+  subtitle?: string
+  userName: string
+  createdAt: Date
+  icon: string
+  color: string
+}
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -23,10 +36,13 @@ export default function Dashboard() {
     totalTasks: 0,
     totalDocuments: 0
   })
+  const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [activityLoading, setActivityLoading] = useState(true)
 
   useEffect(() => {
     fetchDashboardData()
+    fetchActivity()
   }, [])
 
   const fetchDashboardData = async () => {
@@ -52,6 +68,71 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchActivity = async () => {
+    try {
+      const response = await fetch('/api/activity?limit=10')
+      if (response.ok) {
+        const data = await response.json()
+        setActivities(data.activities || [])
+      }
+    } catch (err) {
+      console.error('Error fetching activity:', err)
+    } finally {
+      setActivityLoading(false)
+    }
+  }
+
+  const getActivityIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'FolderOpen':
+        return FolderOpen
+      case 'CheckCircle':
+        return CheckCircle
+      case 'FileText':
+        return FileText
+      case 'MessageSquare':
+        return MessageSquare
+      case 'DollarSign':
+        return DollarSign
+      default:
+        return Activity
+    }
+  }
+
+  const getColorClasses = (color: string) => {
+    switch (color) {
+      case 'blue':
+        return 'bg-blue-100 text-blue-600'
+      case 'green':
+        return 'bg-green-100 text-green-600'
+      case 'purple':
+        return 'bg-purple-100 text-purple-600'
+      case 'orange':
+        return 'bg-orange-100 text-orange-600'
+      case 'yellow':
+        return 'bg-yellow-100 text-yellow-600'
+      default:
+        return 'bg-gray-100 text-gray-600'
+    }
+  }
+
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - new Date(date).getTime()) / 1000)
+    
+    if (diffInSeconds < 60) return 'Только что'
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} мин. назад`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} ч. назад`
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} дн. назад`
+    
+    return new Date(date).toLocaleDateString('ru-RU', { 
+      day: 'numeric', 
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   const statCards = [
@@ -170,7 +251,7 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Быстрые действия</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {quickActions.map((action) => (
-              <PermissionGuard key={action.title} permission={action.permission}>
+              <PermissionGuard key={action.title} permission={action.permission as any}>
                 <Link href={action.href}>
                   <div className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow cursor-pointer">
                     <div className="flex items-start gap-3">
@@ -195,29 +276,48 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-gray-900">Последняя активность</h2>
           </div>
           <div className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">Система запущена и работает</p>
-                  <p className="text-xs text-gray-500">Только что</p>
+            {activityLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">Загрузка активности...</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">База данных подключена</p>
-                  <p className="text-xs text-gray-500">Несколько секунд назад</p>
-                </div>
+            ) : activities.length === 0 ? (
+              <div className="text-center py-8">
+                <Activity className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">Пока нет активности</p>
+                <p className="text-xs text-gray-400 mt-1">Начните создавать проекты и задачи</p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">Все API endpoints активны</p>
-                  <p className="text-xs text-gray-500">Несколько секунд назад</p>
-                </div>
+            ) : (
+              <div className="space-y-4">
+                {activities.map((activity) => {
+                  const Icon = getActivityIcon(activity.icon)
+                  const colorClasses = getColorClasses(activity.color)
+                  
+                  return (
+                    <div key={activity.id} className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg ${colorClasses} flex-shrink-0`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900">
+                          <span className="font-medium">{activity.userName}</span>
+                          {' '}{activity.action}{' '}
+                          <span className="font-medium">"{activity.title}"</span>
+                        </p>
+                        {activity.subtitle && (
+                          <p className="text-xs text-gray-500 mt-0.5">{activity.subtitle}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          {formatTimeAgo(activity.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

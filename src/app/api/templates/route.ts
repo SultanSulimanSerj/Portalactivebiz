@@ -1,71 +1,73 @@
+/**
+ * API для работы с системными шаблонами документов
+ * GET /api/templates - получение списка системных шаблонов
+ * POST /api/templates - НЕ ПОДДЕРЖИВАЕТСЯ (только системные шаблоны)
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth-api'
-import { prisma } from '@/lib/prisma'
+import { checkPermission } from '@/lib/auth-middleware'
+import { getAllSystemTemplates, getSystemTemplatesByCategory } from '@/lib/system-templates'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await authenticateUser(request)
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { allowed, user, error } = await checkPermission(request, 'canViewAllDocuments')
+
+    if (!allowed) {
+      return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
-    const templates = await prisma.documentTemplate.findMany({
-      where: {
-        companyId: user.companyId
-      },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    const { searchParams } = new URL(request.url)
+    const category = searchParams.get('category')
 
-    return NextResponse.json({ templates })
+    // Получаем системные шаблоны
+    let templates = getAllSystemTemplates()
+
+    // Фильтруем по категории если указана
+    if (category) {
+      templates = getSystemTemplatesByCategory(category)
+    }
+
+    // Преобразуем в формат, совместимый с фронтендом
+    const formattedTemplates = templates.map(template => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      category: template.category,
+      type: template.type,
+      fileType: template.fileType,
+      content: template.content,
+      variables: template.variables,
+      autoNumber: template.autoNumber,
+      numberFormat: template.numberFormat,
+      autoFillSources: template.autoFillSources,
+      // Системные шаблоны всегда активны и публичны
+      isActive: true,
+      isPublic: true,
+      companyId: null, // Системные шаблоны
+      creatorId: null, // Системные шаблоны
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Дополнительные поля для совместимости
+      requiresApproval: false,
+      _count: {
+        documents: 0 // Пока не реализовано
+      }
+    }))
+
+    console.log('[DEBUG] System templates found:', formattedTemplates.length)
+    console.log('[DEBUG] Templates:', formattedTemplates.map(t => ({ id: t.id, name: t.name, category: t.category })))
+
+    return NextResponse.json({ templates: formattedTemplates }, { status: 200 })
   } catch (error) {
-    console.error('Error fetching templates:', error)
+    console.error('Error fetching system templates:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
+// Убираем возможность создания пользовательских шаблонов
 export async function POST(request: NextRequest) {
-  try {
-    const user = await authenticateUser(request)
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const body = await request.json()
-    const { name, description, content, variables, type } = body
-
-    const template = await prisma.documentTemplate.create({
-      data: {
-        name,
-        description: description || null,
-        content: content || '',
-        variables: variables || {},
-        type: type || 'DOCX',
-        creatorId: user.id,
-        companyId: user.companyId
-      },
-      include: {
-        creator: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      }
-    })
-
-    return NextResponse.json(template, { status: 201 })
-  } catch (error) {
-    console.error('Error creating template:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
+  return NextResponse.json(
+    { error: 'Создание пользовательских шаблонов не поддерживается. Используйте только системные шаблоны.' },
+    { status: 405 }
+  )
 }

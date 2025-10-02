@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react'
 import { UserRole, getAvailableNavigationSections } from '@/lib/permissions'
+import Notifications from '@/components/notifications'
 
 interface NavigationItem {
   name: string
@@ -100,6 +101,11 @@ export default function Navigation() {
 
   return (
     <>
+      {/* Top bar with notifications */}
+      <div className="lg:pl-64 fixed top-0 right-0 left-0 h-16 bg-white border-b border-gray-200 z-30 flex items-center justify-end px-6">
+        <Notifications />
+      </div>
+
       {/* Mobile menu button */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <Button
@@ -128,7 +134,7 @@ export default function Navigation() {
       `}>
         <div className="p-6">
           <div className="mb-8">
-            <h1 className="text-xl font-bold text-gray-900">Project Portal</h1>
+            <h1 className="text-xl font-bold text-gray-900">Manexa</h1>
             <p className="text-sm text-gray-600">Управление проектами</p>
           </div>
 

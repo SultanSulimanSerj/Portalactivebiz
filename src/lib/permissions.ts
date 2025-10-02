@@ -33,6 +33,8 @@ export interface Permissions {
   canDeleteProjects: boolean
   canViewAllProjects: boolean
   canManageProjectMembers: boolean
+  canViewProjects: boolean
+  canEditProjectClientRequisites: boolean
   
   // Задачи
   canCreateTasks: boolean
@@ -54,6 +56,12 @@ export interface Permissions {
   canEditFinances: boolean
   canDeleteFinances: boolean
   canViewFinancialReports: boolean
+  
+  // Сметы
+  canViewEstimates: boolean
+  canCreateEstimates: boolean
+  canEditEstimates: boolean
+  canDeleteEstimates: boolean
   
   // Согласования
   canCreateApprovals: boolean
@@ -90,6 +98,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canDeleteProjects: true,
     canViewAllProjects: true,
     canManageProjectMembers: true,
+    canViewProjects: true,
+    canEditProjectClientRequisites: true,
     
     canCreateTasks: true,
     canEditTasks: true,
@@ -108,6 +118,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canEditFinances: true,
     canDeleteFinances: true,
     canViewFinancialReports: true,
+    
+    canViewEstimates: true,
+    canCreateEstimates: true,
+    canEditEstimates: true,
+    canDeleteEstimates: true,
     
     canCreateApprovals: true,
     canEditApprovals: true,
@@ -139,6 +154,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canDeleteProjects: true,
     canViewAllProjects: true,
     canManageProjectMembers: true,
+    canViewProjects: true,
+    canEditProjectClientRequisites: true,
     
     canCreateTasks: true,
     canEditTasks: true,
@@ -157,6 +174,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canEditFinances: true,
     canDeleteFinances: true,
     canViewFinancialReports: true,
+    
+    canViewEstimates: true,
+    canCreateEstimates: true,
+    canEditEstimates: true,
+    canDeleteEstimates: true,
     
     canCreateApprovals: true,
     canEditApprovals: true,
@@ -188,6 +210,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canDeleteProjects: false, // Только архивирование
     canViewAllProjects: true,
     canManageProjectMembers: true,
+    canViewProjects: true,
+    canEditProjectClientRequisites: true,
     
     canCreateTasks: true,
     canEditTasks: true,
@@ -206,6 +230,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canEditFinances: true,
     canDeleteFinances: false,
     canViewFinancialReports: true,
+    
+    canViewEstimates: true,
+    canCreateEstimates: true,
+    canEditEstimates: true,
+    canDeleteEstimates: false,
     
     canCreateApprovals: true,
     canEditApprovals: true,
@@ -237,6 +266,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canDeleteProjects: false,
     canViewAllProjects: true, // Может видеть проекты, где является участником
     canManageProjectMembers: false,
+    canViewProjects: true,
+    canEditProjectClientRequisites: true, // Может редактировать реквизиты клиента!
     
     canCreateTasks: false,
     canEditTasks: false, // Только свои задачи
@@ -255,6 +286,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permissions> = {
     canEditFinances: false,
     canDeleteFinances: false,
     canViewFinancialReports: false,
+    
+    canViewEstimates: true, // Только просмотр
+    canCreateEstimates: false,
+    canEditEstimates: false,
+    canDeleteEstimates: false,
     
     canCreateApprovals: true,
     canEditApprovals: false, // Только свои согласования

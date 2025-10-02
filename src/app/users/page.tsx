@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import PermissionGuard, { PermissionButton } from '@/components/permission-guard'
+import { PermissionGuard, PermissionButton } from '@/components/permission-guard'
 import { UserRole } from '@/lib/permissions'
 
 interface User {
@@ -18,8 +18,8 @@ interface User {
   position?: string
   createdAt: string
   _count: {
-    createdProjects: number
-    createdTasks: number
+    Project: number
+    Task: number
   }
 }
 
@@ -299,8 +299,8 @@ export default function UsersPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4">{user.position || '-'}</td>
-                        <td className="py-3 px-4">{user._count?.createdProjects || 0}</td>
-                        <td className="py-3 px-4">{user._count?.createdTasks || 0}</td>
+                        <td className="py-3 px-4">{user._count?.Project || 0}</td>
+                        <td className="py-3 px-4">{user._count?.Task || 0}</td>
                         <td className="py-3 px-4">{formatDate(user.createdAt)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">

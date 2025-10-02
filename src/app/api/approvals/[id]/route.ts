@@ -129,7 +129,8 @@ export async function PUT(
       data: {
         status,
         ...(status === 'APPROVED' && { approvedAt: new Date() }),
-        ...(status === 'REJECTED' && { rejectedAt: new Date() })
+        ...(status === 'REJECTED' && { rejectedAt: new Date() }),
+        updatedAt: new Date()
       },
       include: {
         document: {

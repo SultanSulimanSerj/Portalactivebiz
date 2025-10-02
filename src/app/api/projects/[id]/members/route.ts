@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@/lib/permissions'
+import { generateId } from '@/lib/id-generator'
 
 // Получить участников проекта
 export async function GET(
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canViewAllProjects')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -50,7 +51,7 @@ export async function POST(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canManageProjectMembers')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -100,6 +101,7 @@ export async function POST(
     // Добавляем участника
     const projectUser = await prisma.projectUser.create({
       data: {
+        id: generateId(),
         projectId: params.id,
         userId: userId
       },
@@ -125,7 +127,7 @@ export async function DELETE(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canManageProjectMembers')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 

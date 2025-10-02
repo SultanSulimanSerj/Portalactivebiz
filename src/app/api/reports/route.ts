@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Получаем статистику проектов
     const projects = await prisma.project.findMany({
       where: {
-        companyId: user.companyId
+        companyId: user.companyId!
       },
       include: {
         _count: {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const finances = await prisma.finance.findMany({
       where: {
         project: {
-          companyId: user.companyId
+          companyId: user.companyId!
         }
       }
     })
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const tasks = await prisma.task.findMany({
       where: {
         project: {
-          companyId: user.companyId
+          companyId: user.companyId!
         }
       },
       include: {
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     // Получаем пользователей
     const users = await prisma.user.findMany({
       where: {
-        companyId: user.companyId
+        companyId: user.companyId!
       },
       include: {
         _count: {
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const documents = await prisma.document.findMany({
       where: {
         project: {
-          companyId: user.companyId
+          companyId: user.companyId!
         }
       }
     })

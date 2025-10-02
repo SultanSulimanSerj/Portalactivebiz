@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { generateId } from '@/lib/id-generator'
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,12 +40,13 @@ export async function POST(request: NextRequest) {
     // Создаем пользователя
     const newUser = await prisma.user.create({
       data: {
+        id: generateId(),
         name,
         email,
         password: hashedPassword,
         role,
         position: position || 'Сотрудник',
-        companyId: user.companyId
+        companyId: user.companyId!
       },
       select: {
         id: true,

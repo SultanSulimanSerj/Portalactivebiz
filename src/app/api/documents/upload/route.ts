@@ -3,7 +3,7 @@ import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import { generateId } from '@/lib/id-generator'
 import { saveOptimizedImage, getImageUrl } from '@/lib/image-optimization'
 import { getCDNUrl } from '@/lib/cdn'
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Generate unique filename
     const fileExtension = file.name.split('.').pop()
-    const uniqueFilename = `${uuidv4()}.${fileExtension}`
+    const uniqueFilename = `${generateId()}.${fileExtension}`
     
     // Create uploads directory if it doesn't exist
     const uploadsDir = join(process.cwd(), 'uploads')
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
     // Create document record
     const document = await prisma.document.create({
       data: {
+        id: generateId(),
         title,
         description: description || null,
         fileName: file.name,
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
         documentNumber,
         creatorId: user.id,
         projectId: projectId || null,
+        updatedAt: new Date(),
         // Store optimization metadata
         ...(isImage && {
           metadata: {

@@ -19,7 +19,19 @@ export default function SignUpPage() {
     phone: '',
     address: '',
     companyName: '',
-    companyDescription: ''
+    companyDescription: '',
+    inn: '',
+    kpp: '',
+    ogrn: '',
+    legalAddress: '',
+    actualAddress: '',
+    directorName: '',
+    contactPhone: '',
+    contactEmail: '',
+    bankAccount: '',
+    bankName: '',
+    bankBik: '',
+    correspondentAccount: ''
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -58,23 +70,28 @@ export default function SignUpPage() {
           phone: formData.phone,
           address: formData.address,
           companyName: formData.companyName,
-          companyDescription: formData.companyDescription
+          companyDescription: formData.companyDescription,
+          inn: formData.inn,
+          kpp: formData.kpp,
+          ogrn: formData.ogrn,
+          legalAddress: formData.legalAddress,
+          actualAddress: formData.actualAddress,
+          directorName: formData.directorName,
+          contactPhone: formData.contactPhone,
+          contactEmail: formData.contactEmail,
+          bankAccount: formData.bankAccount,
+          bankName: formData.bankName,
+          bankBik: formData.bankBik,
+          correspondentAccount: formData.correspondentAccount
         })
       })
 
       if (response.ok) {
-        // Автоматический вход после регистрации
-        const result = await signIn('credentials', {
-          email: formData.email,
-          password: formData.password,
-          redirect: false
-        })
-
-        if (result?.ok) {
-          router.push('/')
-        } else {
-          setError('Регистрация прошла успешно, но не удалось войти. Попробуйте войти вручную.')
-        }
+        // Показываем сообщение об успешной регистрации
+        setError('')
+        alert('Регистрация прошла успешно! Теперь вы можете войти в систему.')
+        // Перенаправляем на страницу входа
+        router.push('/auth/signin?message=registration-success')
       } else {
         const errorData = await response.json()
         setError(errorData.error || 'Ошибка регистрации')
@@ -236,6 +253,152 @@ export default function SignUpPage() {
                   onChange={(e) => handleInputChange('companyName', e.target.value)}
                   placeholder="Введите название компании"
                   required
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="inn">ИНН компании</Label>
+                <Input
+                  id="inn"
+                  type="text"
+                  value={formData.inn}
+                  onChange={(e) => handleInputChange('inn', e.target.value)}
+                  placeholder="Введите ИНН компании"
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="kpp">КПП компании</Label>
+                <Input
+                  id="kpp"
+                  type="text"
+                  value={formData.kpp}
+                  onChange={(e) => handleInputChange('kpp', e.target.value)}
+                  placeholder="Введите КПП компании"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="ogrn">ОГРН компании</Label>
+                <Input
+                  id="ogrn"
+                  type="text"
+                  value={formData.ogrn}
+                  onChange={(e) => handleInputChange('ogrn', e.target.value)}
+                  placeholder="Введите ОГРН компании"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="legalAddress">Юридический адрес</Label>
+                <Input
+                  id="legalAddress"
+                  type="text"
+                  value={formData.legalAddress}
+                  onChange={(e) => handleInputChange('legalAddress', e.target.value)}
+                  placeholder="Введите юридический адрес"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="actualAddress">Фактический адрес</Label>
+                <Input
+                  id="actualAddress"
+                  type="text"
+                  value={formData.actualAddress}
+                  onChange={(e) => handleInputChange('actualAddress', e.target.value)}
+                  placeholder="Введите фактический адрес"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="directorName">ФИО директора</Label>
+                <Input
+                  id="directorName"
+                  type="text"
+                  value={formData.directorName}
+                  onChange={(e) => handleInputChange('directorName', e.target.value)}
+                  placeholder="Введите ФИО директора"
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="contactPhone">Контактный телефон</Label>
+                <Input
+                  id="contactPhone"
+                  type="tel"
+                  value={formData.contactPhone}
+                  onChange={(e) => handleInputChange('contactPhone', e.target.value)}
+                  placeholder="+7 (999) 123-45-67"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="contactEmail">Контактный email</Label>
+                <Input
+                  id="contactEmail"
+                  type="email"
+                  value={formData.contactEmail}
+                  onChange={(e) => handleInputChange('contactEmail', e.target.value)}
+                  placeholder="contact@company.com"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="bankAccount">Расчетный счет</Label>
+                <Input
+                  id="bankAccount"
+                  type="text"
+                  value={formData.bankAccount}
+                  onChange={(e) => handleInputChange('bankAccount', e.target.value)}
+                  placeholder="Введите расчетный счет"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="bankName">Название банка</Label>
+                <Input
+                  id="bankName"
+                  type="text"
+                  value={formData.bankName}
+                  onChange={(e) => handleInputChange('bankName', e.target.value)}
+                  placeholder="Введите название банка"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="bankBik">БИК банка</Label>
+                <Input
+                  id="bankBik"
+                  type="text"
+                  value={formData.bankBik}
+                  onChange={(e) => handleInputChange('bankBik', e.target.value)}
+                  placeholder="Введите БИК банка"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="correspondentAccount">Корреспондентский счет</Label>
+                <Input
+                  id="correspondentAccount"
+                  type="text"
+                  value={formData.correspondentAccount}
+                  onChange={(e) => handleInputChange('correspondentAccount', e.target.value)}
+                  placeholder="Введите корреспондентский счет"
                   className="mt-1"
                 />
               </div>

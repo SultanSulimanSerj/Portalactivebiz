@@ -79,3 +79,48 @@ export async function requireRole(request: NextRequest, allowedRoles: string[]):
   
   return user
 }
+
+export async function loginDemoUser(email: string, password: string) {
+  try {
+    // Ищем пользователя в базе данных
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    })
+
+    if (!user) {
+      console.log('User not found:', email)
+      return null
+    }
+
+    // Проверяем пароль (в демо-версии используем простую проверку)
+    if (user.password !== password) {
+      console.log('Invalid password for user:', email)
+      return null
+    }
+
+    // Генерируем простой токен для демо-версии
+    const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64')
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name || '',
+        role: user.role,
+        companyId: user.companyId
+      },
+      token
+    }
+  } catch (error) {
+    console.error('Login demo user error:', error)
+    return null
+  }
+}

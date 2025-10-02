@@ -49,7 +49,7 @@ export function clearCache(pattern?: string): void {
     return
   }
   
-  for (const key of cache.keys()) {
+  for (const key of Array.from(cache.keys())) {
     if (key.includes(pattern)) {
       cache.delete(key)
     }
@@ -59,7 +59,7 @@ export function clearCache(pattern?: string): void {
 // Очистка устаревших записей каждые 5 минут
 setInterval(() => {
   const now = Date.now()
-  for (const [key, value] of cache.entries()) {
+  for (const [key, value] of Array.from(cache.entries())) {
     const isExpired = (now - value.timestamp) > (value.ttl * 1000)
     if (isExpired) {
       cache.delete(key)

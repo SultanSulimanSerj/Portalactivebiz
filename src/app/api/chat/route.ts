@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
-import { notifyChatMention } from '@/lib/notifications'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
           project: {
             OR: [
               { creatorId: user.id }, // Пользователь создал проект
-              { users: { some: { userId: user.id } } } // Пользователь является участником проекта
+              { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
             ]
           }
         }
@@ -84,9 +84,11 @@ export async function POST(request: NextRequest) {
 
     const message = await prisma.chatMessage.create({
       data: {
+        id: generateId(),
         content,
         projectId: projectId || null,
-        userId: user.id
+        userId: user.id,
+        updatedAt: new Date()
       },
       include: {
         user: {
@@ -130,15 +132,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        if (mentionedUserIds.length > 0) {
-          await notifyChatMention(
-            message.id,
-            mentionedUserIds,
-            user.name || 'Пользователь',
-            content,
-            message.project?.name
-          )
-        }
+        // Уведомления отключены для упрощения
       } catch (notificationError) {
         console.error('Error sending chat mention notifications:', notificationError)
         // Не прерываем отправку сообщения из-за ошибки уведомлений

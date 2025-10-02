@@ -23,7 +23,7 @@ export async function getUserContext(request: NextRequest): Promise<UserContext 
       id: user.id,
       email: user.email,
       role: (user.role || 'USER') as UserRole, // По умолчанию USER
-      companyId: user.companyId
+      companyId: user.companyId!
     }
   } catch (error) {
     console.error('Error getting user context:', error)
@@ -41,7 +41,7 @@ export async function getUserProjectContext(
     if (!user) return null
 
     // Получаем роль пользователя в проекте
-    const projectMember = await prisma.projectMember.findFirst({
+    const projectMember = await prisma.projectUser.findFirst({
       where: {
         projectId,
         userId: user.id
@@ -58,7 +58,7 @@ export async function getUserProjectContext(
       id: user.id,
       email: user.email,
       role: user.role as UserRole,
-      companyId: user.companyId,
+      companyId: user.companyId!,
       projectRole,
       isProjectOwner
     }

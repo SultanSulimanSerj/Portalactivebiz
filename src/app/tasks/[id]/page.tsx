@@ -51,16 +51,16 @@ export default function TaskDetailPage() {
   })
 
   useEffect(() => {
-    if (params.id) {
+    if (params?.id) {
       fetchTask()
       fetchComments()
       fetchUsers()
     }
-  }, [params.id])
+  }, [params?.id])
 
   const fetchTask = async () => {
     try {
-      const response = await fetch(`/api/tasks/${params.id}`, {
+      const response = await fetch(`/api/tasks/${params?.id}`, {
       })
       if (response.ok) {
         const data = await response.json()
@@ -78,7 +78,7 @@ export default function TaskDetailPage() {
 
   const fetchComments = async () => {
     try {
-      const response = await fetch(`/api/tasks/${params.id}/comments`, {
+      const response = await fetch(`/api/tasks/${params?.id}/comments`, {
       })
       if (response.ok) {
         const data = await response.json()
@@ -107,7 +107,7 @@ export default function TaskDetailPage() {
     if (!newComment.trim()) return
 
     try {
-      const response = await fetch(`/api/tasks/${params.id}/comments`, {
+      const response = await fetch(`/api/tasks/${params?.id}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +142,7 @@ export default function TaskDetailPage() {
     e.preventDefault()
     
     try {
-      const response = await fetch(`/api/tasks/${params.id}`, {
+      const response = await fetch(`/api/tasks/${params?.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

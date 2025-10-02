@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
-import { notifyNewApproval } from '@/lib/notifications'
 import { UserRole } from '@/lib/permissions'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canCreateApprovals')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -37,8 +37,8 @@ export async function GET(request: NextRequest) {
       creator: {
         companyId: user.companyId
       },
-      ...(status && { status }),
-      ...(type && { type })
+      ...(status && { status: status as any }),
+      ...(type && { type: type as any })
     }
 
     const [approvals, total] = await Promise.all([
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canCreateApprovals')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
 
     const approval = await prisma.approval.create({
       data: {
+        id: generateId(),
         title,
         description: description || null,
         type,
@@ -145,14 +146,17 @@ export async function POST(request: NextRequest) {
         requireAllApprovals: requireAllApprovals || false,
         autoPublishOnApproval: autoPublishOnApproval !== undefined ? autoPublishOnApproval : true,
         creatorId: user.id,
+        updatedAt: new Date(),
         ...(documentId && { documentId }),
         ...(projectId && { projectId }),
         assignments: {
           create: assigneeIds?.map((userId: string, index: number) => ({
+            id: generateId(),
             userId,
             status: 'PENDING',
             role: roles?.[userId] || 'APPROVER',
-            order: index
+            order: index,
+            updatedAt: new Date()
           })) || []
         }
       },
@@ -200,6 +204,7 @@ export async function POST(request: NextRequest) {
     // Добавляем запись в историю
     await prisma.approvalHistory.create({
       data: {
+        id: generateId(),
         action: 'created',
         changes: {
           title,
@@ -210,21 +215,6 @@ export async function POST(request: NextRequest) {
         userId: user.id
       }
     })
-
-    // Отправляем уведомления участникам
-    if (assigneeIds && assigneeIds.length > 0) {
-      try {
-        await notifyNewApproval(
-          approval.id,
-          assigneeIds,
-          title,
-          approval.project?.name
-        )
-      } catch (notificationError) {
-        console.error('Error sending notifications:', notificationError)
-        // Не прерываем выполнение, если уведомления не отправились
-      }
-    }
 
     return NextResponse.json(approval, { status: 201 })
   } catch (error) {

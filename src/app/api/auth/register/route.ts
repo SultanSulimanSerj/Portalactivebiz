@@ -1,15 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
+import * as bcrypt from 'bcryptjs'
+import { generateId } from '@/lib/id-generator'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email, password, phone, address, companyName, companyDescription } = body
+    const { 
+      name, 
+      email, 
+      password, 
+      phone, 
+      address, 
+      companyName, 
+      companyDescription,
+      // Реквизиты компании для генерации документов
+      inn,
+      kpp,
+      ogrn,
+      legalAddress,
+      actualAddress,
+      directorName,
+      contactPhone,
+      contactEmail,
+      bankAccount,
+      bankName,
+      bankBik,
+      correspondentAccount
+    } = body
 
     // Валидация
-    if (!name || !email || !password || !companyName) {
-      return NextResponse.json({ error: 'Все обязательные поля должны быть заполнены' }, { status: 400 })
+    if (!name || !email || !password || !companyName || !inn || !directorName) {
+      return NextResponse.json({ error: 'Все обязательные поля должны быть заполнены (ФИО, Email, Пароль, Название компании, ИНН, ФИО директора)' }, { status: 400 })
     }
 
     if (password.length < 6) {
@@ -33,14 +55,29 @@ export async function POST(request: NextRequest) {
       // Создаем компанию
       const company = await tx.company.create({
         data: {
+          id: generateId(),
           name: companyName,
-          description: companyDescription || null
+          description: companyDescription || null,
+          inn: inn,
+          kpp: kpp || null,
+          ogrn: ogrn || null,
+          legalAddress: legalAddress || null,
+          actualAddress: actualAddress || null,
+          directorName: directorName,
+          contactEmail: contactEmail || email, // Используем контактный email или основной
+          contactPhone: contactPhone || phone || null,
+          bankAccount: bankAccount || null,
+          bankName: bankName || null,
+          bankBik: bankBik || null,
+          correspondentAccount: correspondentAccount || null,
+          updatedAt: new Date()
         }
       })
 
       // Создаем пользователя как владельца компании
       const user = await tx.user.create({
         data: {
+          id: generateId(),
           name,
           email,
           password: hashedPassword,
@@ -48,7 +85,8 @@ export async function POST(request: NextRequest) {
           position: 'Владелец',
           companyId: company.id,
           phone: phone || null,
-          address: address || null
+          address: address || null,
+          updatedAt: new Date()
         },
         select: {
           id: true,
@@ -56,7 +94,28 @@ export async function POST(request: NextRequest) {
           email: true,
           role: true,
           position: true,
-          companyId: true
+          phone: true,
+          address: true,
+          companyId: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              legalName: true,
+              inn: true,
+              directorName: true,
+              directorPosition: true,
+              contactEmail: true,
+              contactPhone: true,
+              bankAccount: true,
+              bankName: true,
+              bankBik: true,
+              correspondentAccount: true,
+              legalAddress: true,
+              actualAddress: true,
+              city: true
+            }
+          }
         }
       })
 

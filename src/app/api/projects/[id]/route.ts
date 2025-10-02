@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@/lib/permissions'
+import { generateId } from '@/lib/id-generator'
+import { FinanceType } from '@prisma/client'
 
 export async function GET(
   request: NextRequest,
@@ -10,7 +12,7 @@ export async function GET(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canViewAllProjects')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -27,18 +29,28 @@ export async function GET(
       // MANAGER и USER видят только проекты, где являются участниками
       where.OR = [
         { creatorId: user.id }, // Пользователь создал проект
-        { users: { some: { userId: user.id } } } // Пользователь является участником
+        { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником
       ]
     }
 
     const project = await prisma.project.findFirst({
       where,
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        status: true,
+        priority: true,
+        budget: true,
+        startDate: true,
+        endDate: true,
+        createdAt: true,
+        updatedAt: true,
         creator: {
           select: { id: true, name: true, email: true }
         },
         users: {
-          include: {
+          select: {
             user: {
               select: { id: true, name: true, email: true, position: true, phone: true }
             }
@@ -68,7 +80,7 @@ export async function PUT(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canEditProjects')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -109,20 +121,49 @@ export async function PUT(
         }
       })
 
+      // Получаем старый статус проекта для проверки изменения
+      const oldProject = await tx.project.findUnique({
+        where: { id: params.id },
+        select: { status: true }
+      })
+
+      // Если изменился статус с PLANNING на ACTIVE - конвертируем планируемый доход в реальный
+      if (status && oldProject && oldProject.status === 'PLANNING' && (status === 'ACTIVE' || status === 'COMPLETED')) {
+        await tx.finance.updateMany({
+          where: {
+            projectId: params.id,
+            type: 'PLANNED_INCOME'
+          },
+          data: {
+            type: 'INCOME',
+            category: 'Доход от проекта'
+          }
+        })
+      }
+
       // Если изменился бюджет, обновляем финансовую запись
       if (budget !== undefined) {
         const budgetAmount = parseFloat(budget)
         const projectStatus = status || project.status
-        const isCompleted = projectStatus === 'COMPLETED'
+        
+        // Определяем тип финансовой записи в зависимости от статуса
+        let financeType: 'PLANNED_INCOME' | 'INCOME' = 'PLANNED_INCOME'
+        let financeCategory = 'Планируемый доход'
+        
+        if (projectStatus === 'ACTIVE' || projectStatus === 'COMPLETED') {
+          financeType = 'INCOME'
+          financeCategory = 'Доход от проекта'
+        }
         
         // Удаляем старые финансовые записи с бюджетом проекта
         await tx.finance.deleteMany({
           where: {
             projectId: params.id,
-            type: 'INCOME',
             OR: [
+              { type: 'INCOME', category: { contains: 'Бюджет проекта' } },
+              { type: 'PLANNED_INCOME', category: { contains: 'Планируемый' } },
               { category: 'Планируемый доход' },
-              { category: 'Доход' }
+              { category: 'Доход от проекта' }
             ]
           }
         })
@@ -131,13 +172,15 @@ export async function PUT(
         if (budgetAmount > 0) {
           await tx.finance.create({
             data: {
-              type: 'INCOME',
-              category: isCompleted ? 'Доход' : 'Планируемый доход',
+              id: generateId(),
+              type: financeType as any,
+              category: financeCategory,
               description: `Бюджет проекта "${project.name}"`,
               amount: budgetAmount,
               date: new Date(),
               projectId: project.id,
-              creatorId: user.id
+              creatorId: user.id,
+              updatedAt: new Date()
             }
           })
         }
@@ -160,7 +203,7 @@ export async function DELETE(
   try {
     const { allowed, user, error } = await checkPermission(request, 'canDeleteProjects')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 

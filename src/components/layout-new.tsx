@@ -48,7 +48,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="fixed inset-0 bg-gray-900/50" onClick={() => setSidebarOpen(false)} />
           <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b">
-              <h1 className="text-lg font-semibold text-gray-900">Project Portal</h1>
+              <h1 className="text-lg font-semibold text-gray-900">Manexa</h1>
               <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="h-5 w-5" />
               </button>

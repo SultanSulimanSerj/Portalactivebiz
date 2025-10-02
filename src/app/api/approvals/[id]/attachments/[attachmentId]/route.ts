@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { deleteFile } from '@/lib/storage'
+import { generateId } from '@/lib/id-generator'
 
 // DELETE /api/approvals/[id]/attachments/[attachmentId] - Удалить вложение
 export async function DELETE(
@@ -17,7 +18,13 @@ export async function DELETE(
     // Получаем вложение
     const attachment = await prisma.approvalAttachment.findUnique({
       where: { id: params.attachmentId },
-      include: { approval: true }
+      include: { 
+        approval: {
+          include: {
+            assignments: true
+          }
+        }
+      }
     })
 
     if (!attachment) {
@@ -46,6 +53,7 @@ export async function DELETE(
     // Добавляем запись в историю
     await prisma.approvalHistory.create({
       data: {
+        id: generateId(),
         action: 'file_deleted',
         changes: {
           fileName: attachment.fileName,

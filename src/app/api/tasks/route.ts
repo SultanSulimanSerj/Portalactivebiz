@@ -3,12 +3,13 @@ import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { notifyTaskAssignment } from '@/lib/notifications'
 import { UserRole } from '@/lib/permissions'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canViewAllTasks')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -39,14 +40,14 @@ export async function GET(request: NextRequest) {
       // Никаких дополнительных ограничений
     } else if (user.role === UserRole.MANAGER) {
       // MANAGER видит задачи проектов, где является участником
-      where.project.OR = [
+      where.Project.OR = [
         { creatorId: user.id }, // Пользователь создал проект
-        { users: { some: { userId: user.id } } } // Пользователь является участником проекта
+        { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
       ]
     } else {
       // USER видит только назначенные ему задачи
       where.OR = [
-        { assignments: { some: { userId: user.id } } }, // Назначенные задачи
+        { TaskAssignment: { some: { userId: user.id } } }, // Назначенные задачи
         { creatorId: user.id } // Созданные пользователем задачи
       ]
     }
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canCreateTasks')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
 
     const task = await prisma.task.create({
       data: {
+        id: generateId(),
         title,
         description: description || null,
         status: status || 'TODO',
@@ -111,8 +113,10 @@ export async function POST(request: NextRequest) {
         dueDate: dueDate ? new Date(dueDate) : null,
         projectId: projectId || null,
         creatorId: user.id,
+        updatedAt: new Date(),
         assignments: {
           create: assigneeIds?.map((userId: string) => ({
+            id: generateId(),
             userId
           })) || []
         }

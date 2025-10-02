@@ -1,423 +1,302 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Plus, FileText, Edit, Download, Trash2, Search } from 'lucide-react'
 import Layout from '@/components/layout'
+import { FileText, Search, Filter, Eye, FileType, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
 
-interface Template {
+interface SystemTemplate {
   id: string
   name: string
-  description: string | null
-  content: string
-  variables: Record<string, string>
+  description?: string
+  category: string
   type: string
+  fileType: string
+  autoFillSources: {
+    company?: string[]
+    project?: string[]
+    custom?: string[]
+  }
+  isActive: boolean
+  isPublic: boolean
+  companyId: null
+  creatorId: null
   createdAt: string
   updatedAt: string
-  creator: {
-    id: string
-    name: string
-    email: string
+  _count: {
+    documents: number
   }
 }
 
+const categoryLabels: Record<string, string> = {
+  COMMERCIAL: 'Коммерческие',
+  FINANCIAL: 'Финансовые',
+  REPORT: 'Отчетные',
+  HR: 'Кадровые',
+  TECHNICAL: 'Технические',
+  LEGAL: 'Юридические',
+  OTHER: 'Прочие',
+}
+
+const fileTypeLabels: Record<string, string> = {
+  HTML: 'HTML',
+  DOCX: 'Word',
+  XLSX: 'Excel',
+  PDF: 'PDF',
+  MARKDOWN: 'Markdown',
+}
+
 export default function TemplatesPage() {
-  const [templates, setTemplates] = useState<Template[]>([])
+  const [templates, setTemplates] = useState<SystemTemplate[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    description: '',
-    content: '',
-    type: 'DOCX',
-    variables: {} as Record<string, string>
-  })
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
 
   useEffect(() => {
     fetchTemplates()
-  }, [])
+  }, [filterCategory])
 
   const fetchTemplates = async () => {
     try {
-      const response = await fetch('/api/templates')
+      const params = new URLSearchParams()
+      if (filterCategory !== 'all') params.append('category', filterCategory)
+
+      const response = await fetch(`/api/templates?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
         setTemplates(data.templates || [])
       }
-    } catch (err) {
-      console.error('Error fetching templates:', err)
+    } catch (error) {
+      console.error('Error fetching system templates:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCreateTemplate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const response = await fetch('/api/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(createForm)
-      })
-
-      if (response.ok) {
-        const newTemplate = await response.json()
-        setTemplates([newTemplate, ...templates])
-        setShowCreateModal(false)
-        setCreateForm({
-          name: '',
-          description: '',
-          content: '',
-          type: 'DOCX',
-          variables: {}
-        })
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const handleEditTemplate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedTemplate) return
-
-    try {
-      const response = await fetch(`/api/templates/${selectedTemplate.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(createForm)
-      })
-
-      if (response.ok) {
-        const updatedTemplate = await response.json()
-        setTemplates(templates.map(t => t.id === selectedTemplate.id ? updatedTemplate : t))
-        setShowEditModal(false)
-        setSelectedTemplate(null)
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этот шаблон?')) return
-
-    try {
-      const response = await fetch(`/api/templates/${templateId}`, {
-        method: 'DELETE'
-      })
-
-      if (response.ok) {
-        setTemplates(templates.filter(t => t.id !== templateId))
-      }
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
-  const handleDownloadTemplate = (template: Template) => {
-    // Создаем файл с содержимым шаблона
-    const blob = new Blob([template.content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${template.name}.${template.type.toLowerCase()}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  const filteredTemplates = templates.filter(template =>
-    template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (template.description && template.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredTemplates = templates.filter((template) =>
+    template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    template.description?.toLowerCase().includes(searchQuery.toLowerCase())
   )
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU')
-  }
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Загрузка шаблонов...</p>
-          </div>
-        </div>
-      </Layout>
-    )
-  }
 
   return (
     <Layout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Шаблоны документов</h1>
-            <p className="text-sm text-gray-600 mt-1">{templates.length} шаблонов</p>
+            <h1 className="text-2xl font-bold text-gray-900">Системные шаблоны</h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Готовые шаблоны документов с автоматическим заполнением данных
+            </p>
           </div>
-          <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Создать шаблон
-          </Button>
+          <Link
+            href="/documents/generate"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <FileText className="h-4 w-4" />
+            Создать документ
+          </Link>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Поиск шаблонов..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        {/* Templates Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTemplates.length === 0 ? (
-            <div className="col-span-full text-center py-12">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Нет шаблонов</h3>
-              <p className="text-gray-500">Создайте первый шаблон документа</p>
+        {/* Информационное сообщение */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <FileText className="h-5 w-5 text-blue-400" />
             </div>
-          ) : (
-            filteredTemplates.map((template) => (
-              <Card key={template.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-blue-600" />
-                      <CardTitle className="text-lg">{template.name}</CardTitle>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedTemplate(template)
-                          setCreateForm({
-                            name: template.name,
-                            description: template.description || '',
-                            content: template.content,
-                            type: template.type,
-                            variables: template.variables
-                          })
-                          setShowEditModal(true)
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteTemplate(template.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <CardDescription>{template.description || 'Нет описания'}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Тип:</span>
-                      <span className="font-medium">{template.type}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Создатель:</span>
-                      <span className="font-medium">{template.creator.name}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">Создан:</span>
-                      <span className="font-medium">{formatDate(template.createdAt)}</span>
-                    </div>
-                    <div className="pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadTemplate(template)}
-                        className="w-full"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Скачать
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">Системные шаблоны</h3>
+              <div className="mt-1 text-sm text-blue-700">
+                <p>
+                  Все шаблоны встроены в систему и автоматически заполняются данными из вашей компании и проектов. 
+                  Дополнительно можно указать только необходимые переменные.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Create Template Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <CardHeader>
-                <CardTitle>Создать шаблон</CardTitle>
-                <CardDescription>
-                  Создайте новый шаблон документа
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreateTemplate} className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Название</Label>
-                    <Input
-                      id="name"
-                      value={createForm.name}
-                      onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                      placeholder="Название шаблона"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="description">Описание</Label>
-                    <Input
-                      id="description"
-                      value={createForm.description}
-                      onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                      placeholder="Описание шаблона"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="type">Тип файла</Label>
-                    <select
-                      id="type"
-                      value={createForm.type}
-                      onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                    >
-                      <option value="DOCX">DOCX</option>
-                      <option value="PDF">PDF</option>
-                      <option value="XLSX">XLSX</option>
-                      <option value="TXT">TXT</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="content">Содержимое шаблона</Label>
-                    <textarea
-                      id="content"
-                      value={createForm.content}
-                      onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
-                      placeholder="Введите содержимое шаблона..."
-                      className="w-full p-2 border border-gray-300 rounded-md h-32"
-                      required
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowCreateModal(false)}
-                    >
-                      Отмена
-                    </Button>
-                    <Button type="submit">
-                      Создать шаблон
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+        {/* Фильтры и поиск */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Поиск по названию или описанию..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
-        )}
 
-        {/* Edit Template Modal */}
-        {showEditModal && selectedTemplate && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <CardHeader>
-                <CardTitle>Редактировать шаблон</CardTitle>
-                <CardDescription>
-                  Измените параметры шаблона
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleEditTemplate} className="space-y-4">
-                  <div>
-                    <Label htmlFor="edit-name">Название</Label>
-                    <Input
-                      id="edit-name"
-                      value={createForm.name}
-                      onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                      placeholder="Название шаблона"
-                      required
-                    />
-                  </div>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Все категории</option>
+            {Object.entries(categoryLabels).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-                  <div>
-                    <Label htmlFor="edit-description">Описание</Label>
-                    <Input
-                      id="edit-description"
-                      value={createForm.description}
-                      onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                      placeholder="Описание шаблона"
-                    />
-                  </div>
+        {/* Статистика */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Всего шаблонов</p>
+                <p className="text-2xl font-bold text-gray-900">{templates.length}</p>
+              </div>
+              <FileText className="h-8 w-8 text-blue-500" />
+            </div>
+          </div>
 
-                  <div>
-                    <Label htmlFor="edit-type">Тип файла</Label>
-                    <select
-                      id="edit-type"
-                      value={createForm.type}
-                      onChange={(e) => setCreateForm({ ...createForm, type: e.target.value })}
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                    >
-                      <option value="DOCX">DOCX</option>
-                      <option value="PDF">PDF</option>
-                      <option value="XLSX">XLSX</option>
-                      <option value="TXT">TXT</option>
-                    </select>
-                  </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Системных</p>
+                <p className="text-2xl font-bold text-green-600">{templates.length}</p>
+              </div>
+              <FileType className="h-8 w-8 text-green-500" />
+            </div>
+          </div>
 
-                  <div>
-                    <Label htmlFor="edit-content">Содержимое шаблона</Label>
-                    <textarea
-                      id="edit-content"
-                      value={createForm.content}
-                      onChange={(e) => setCreateForm({ ...createForm, content: e.target.value })}
-                      placeholder="Введите содержимое шаблона..."
-                      className="w-full p-2 border border-gray-300 rounded-md h-32"
-                      required
-                    />
-                  </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Категорий</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {new Set(templates.map((t) => t.category)).size}
+                </p>
+              </div>
+              <Filter className="h-8 w-8 text-purple-500" />
+            </div>
+          </div>
 
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowEditModal(false)}
-                    >
-                      Отмена
-                    </Button>
-                    <Button type="submit">
-                      Сохранить изменения
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Документов создано</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {templates.reduce((sum, t) => sum + t._count.documents, 0)}
+                </p>
+              </div>
+              <FileText className="h-8 w-8 text-orange-500" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Таблица шаблонов */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">Загрузка системных шаблонов...</div>
+        ) : filteredTemplates.length === 0 ? (
+          <div className="p-8 text-center">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500">
+              {searchQuery ? 'Шаблоны не найдены' : 'Нет доступных системных шаблонов'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Название
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Категория
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Формат
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Автозаполнение
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Использован
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Статус
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    Действия
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredTemplates.map((template) => (
+                  <tr key={template.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="font-medium text-gray-900">{template.name}</div>
+                        {template.description && (
+                          <div className="text-sm text-gray-500 truncate max-w-xs">
+                            {template.description}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                        {categoryLabels[template.category] || template.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+                        {fileTypeLabels[template.fileType] || template.fileType}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs text-gray-600">
+                        {template.autoFillSources?.company && (
+                          <div>Компания: {template.autoFillSources.company.length} полей</div>
+                        )}
+                        {template.autoFillSources?.project && (
+                          <div>Проект: {template.autoFillSources.project.length} полей</div>
+                        )}
+                        {template.autoFillSources?.custom && (
+                          <div>Ручной ввод: {template.autoFillSources.custom.length} полей</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-sm text-gray-900">
+                        {template._count.documents} раз
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+                        Системный
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/templates/${template.id}`}
+                          className="p-1 text-gray-600 hover:text-blue-600"
+                          title="Просмотр"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                        <Link
+                          href={`/documents/generate?templateId=${template.id}`}
+                          className="p-1 text-gray-600 hover:text-green-600"
+                          title="Создать документ"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -3,12 +3,13 @@ import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { notifyDocumentUpload } from '@/lib/notifications'
 import { UserRole } from '@/lib/permissions'
+import { generateId } from '@/lib/id-generator'
 
 export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canViewAllDocuments')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
           project: {
             OR: [
               { creatorId: user.id }, // Пользователь создал проект
-              { users: { some: { userId: user.id } } } // Пользователь является участником проекта
+              { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
             ]
           }
         }
@@ -68,6 +69,15 @@ export async function GET(request: NextRequest) {
       prisma.document.count({ where })
     ])
 
+    console.log('=== API /api/documents ===')
+    console.log('Найдено документов:', documents.length)
+    console.log('Первый документ:', documents[0] ? {
+      id: documents[0].id,
+      title: documents[0].title,
+      projectId: documents[0].projectId,
+      project: documents[0].project
+    } : 'Нет документов')
+
     return NextResponse.json({
       documents,
       pagination: {
@@ -87,7 +97,7 @@ export async function POST(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canCreateDocuments')
     
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
@@ -96,6 +106,7 @@ export async function POST(request: NextRequest) {
 
     const document = await prisma.document.create({
       data: {
+        id: generateId(),
         title,
         description: description || null,
         fileName: 'temp.txt',
@@ -105,7 +116,8 @@ export async function POST(request: NextRequest) {
         version: 1,
         documentNumber: `DOC-${Date.now()}`,
         creatorId: user.id,
-        projectId: projectId || null
+        projectId: projectId || null,
+        updatedAt: new Date()
       },
       include: {
         creator: {
@@ -135,7 +147,7 @@ export async function POST(request: NextRequest) {
             participantIds,
             title,
             document.project.name,
-            user.name || 'Пользователь'
+            user.email || 'Пользователь'
           )
         }
       } catch (notificationError) {
