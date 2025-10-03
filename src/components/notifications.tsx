@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Bell, X, Check, AlertCircle, Info, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -21,9 +21,63 @@ export default function Notifications() {
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const previousCountRef = useRef<number>(0)
+
+  // Функция для воспроизведения звука
+  const playNotificationSound = () => {
+    try {
+      console.log('🔔 Воспроизведение звука уведомления...')
+      
+      // Создаем аудио контекст
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      
+      // Первый "бип"
+      const oscillator1 = audioContext.createOscillator()
+      const gainNode1 = audioContext.createGain()
+      
+      oscillator1.connect(gainNode1)
+      gainNode1.connect(audioContext.destination)
+      
+      oscillator1.frequency.value = 800
+      oscillator1.type = 'sine'
+      
+      gainNode1.gain.setValueAtTime(0.5, audioContext.currentTime)
+      gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15)
+      
+      oscillator1.start(audioContext.currentTime)
+      oscillator1.stop(audioContext.currentTime + 0.15)
+      
+      // Второй "бип" (чуть выше)
+      const oscillator2 = audioContext.createOscillator()
+      const gainNode2 = audioContext.createGain()
+      
+      oscillator2.connect(gainNode2)
+      gainNode2.connect(audioContext.destination)
+      
+      oscillator2.frequency.value = 1000
+      oscillator2.type = 'sine'
+      
+      gainNode2.gain.setValueAtTime(0.5, audioContext.currentTime + 0.2)
+      gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.35)
+      
+      oscillator2.start(audioContext.currentTime + 0.2)
+      oscillator2.stop(audioContext.currentTime + 0.35)
+      
+      console.log('✅ Звук воспроизведен')
+    } catch (error) {
+      console.error('❌ Ошибка воспроизведения звука:', error)
+    }
+  }
 
   useEffect(() => {
     fetchNotifications()
+    
+    // Проверяем уведомления каждые 10 секунд
+    const interval = setInterval(() => {
+      fetchNotifications()
+    }, 10000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   const fetchNotifications = async () => {
@@ -31,7 +85,27 @@ export default function Notifications() {
       const response = await fetch('/api/notifications')
       if (response.ok) {
         const data = await response.json()
-        setNotifications(data.notifications || [])
+        const newNotifications = data.notifications || []
+        
+        // Проверяем, появились ли новые непрочитанные уведомления
+        const currentUnreadCount = newNotifications.filter((n: Notification) => !n.isRead).length
+        const previousUnreadCount = previousCountRef.current
+        
+        console.log('📊 Уведомления:', {
+          текущие: currentUnreadCount,
+          предыдущие: previousUnreadCount,
+          новые: currentUnreadCount - previousUnreadCount
+        })
+        
+        // Если появились новые непрочитанные уведомления, воспроизводим звук
+        if (currentUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
+          console.log('🎵 Обнаружены новые уведомления! Воспроизводим звук...')
+          playNotificationSound()
+        }
+        
+        // Обновляем счетчик и уведомления
+        previousCountRef.current = currentUnreadCount
+        setNotifications(newNotifications)
       }
     } catch (error) {
       console.error('Error fetching notifications:', error)
