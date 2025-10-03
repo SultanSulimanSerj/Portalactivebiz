@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
@@ -12,28 +13,40 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const approval = await prisma.approval.findFirst({
-      where: {
-        id: params.id,
-        OR: [
-          // Пользователь является создателем согласования
-          {
-            creatorId: user.id
-          },
-          // Пользователь является участником согласования
-          {
-            assignments: {
-              some: {
-                userId: user.id
-              }
-            }
+    let where: any = {
+      id: params.id,
+      // Проверяем, что согласование принадлежит компании пользователя
+      creator: {
+        companyId: user.companyId
+      }
+    }
+
+    // OWNER и ADMIN видят все согласования компании
+    if (user.role === UserRole.OWNER || user.role === UserRole.ADMIN) {
+      // Никаких дополнительных ограничений
+    } else {
+      // MANAGER и USER видят только согласования:
+      where.OR = [
+        // Пользователь является создателем согласования
+        { creatorId: user.id },
+        // Пользователь является участником согласования
+        { assignments: { some: { userId: user.id } } },
+        // Согласование привязано к проекту, где пользователь участвует
+        {
+          project: {
+            OR: [
+              { creatorId: user.id },
+              { users: { some: { userId: user.id } } }
+            ]
           }
-        ],
-        // Дополнительно проверяем, что согласование принадлежит компании пользователя
-        creator: {
-          companyId: user.companyId
-        }
-      },
+        },
+        // Согласование не привязано к проекту
+        { projectId: null }
+      ]
+    }
+
+    const approval = await prisma.approval.findFirst({
+      where,
       include: {
         creator: {
           select: { id: true, name: true, email: true }
@@ -96,28 +109,38 @@ export async function PUT(
     const { status, comment } = body
 
     // Сначала проверяем, что пользователь имеет право обновлять это согласование
-    const existingApproval = await prisma.approval.findFirst({
-      where: {
-        id: params.id,
-        OR: [
-          // Пользователь является создателем согласования
-          {
-            creatorId: user.id
-          },
-          // Пользователь является участником согласования
-          {
-            assignments: {
-              some: {
-                userId: user.id
-              }
-            }
-          }
-        ],
-        // Дополнительно проверяем, что согласование принадлежит компании пользователя
-        creator: {
-          companyId: user.companyId
-        }
+    let where: any = {
+      id: params.id,
+      // Проверяем, что согласование принадлежит компании пользователя
+      creator: {
+        companyId: user.companyId
       }
+    }
+
+    // OWNER и ADMIN могут обновлять все согласования компании
+    if (user.role === UserRole.OWNER || user.role === UserRole.ADMIN) {
+      // Никаких дополнительных ограничений
+    } else {
+      // MANAGER и USER могут обновлять только согласования:
+      where.OR = [
+        // Пользователь является создателем согласования
+        { creatorId: user.id },
+        // Пользователь является участником согласования
+        { assignments: { some: { userId: user.id } } },
+        // Согласование привязано к проекту, где пользователь участвует
+        {
+          project: {
+            OR: [
+              { creatorId: user.id },
+              { users: { some: { userId: user.id } } }
+            ]
+          }
+        }
+      ]
+    }
+
+    const existingApproval = await prisma.approval.findFirst({
+      where
     })
 
     if (!existingApproval) {

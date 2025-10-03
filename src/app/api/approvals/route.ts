@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/auth-middleware'
+import { checkPermission, canUserAccessProject } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@/lib/permissions'
 import { generateId } from '@/lib/id-generator'
+import { notifyNewApproval } from '@/lib/notifications'
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,27 +19,40 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')
     const type = searchParams.get('type')
 
-    const where = {
-      OR: [
-        // Пользователь является создателем согласования
-        {
-          creatorId: user.id
-        },
-        // Пользователь является участником согласования
-        {
-          assignments: {
-            some: {
-              userId: user.id
-            }
-          }
-        }
-      ],
+    let where: any = {
       // Дополнительно проверяем, что согласование принадлежит компании пользователя
       creator: {
         companyId: user.companyId
       },
       ...(status && { status: status as any }),
       ...(type && { type: type as any })
+    }
+
+    // OWNER и ADMIN видят все согласования компании
+    if (user.role === UserRole.OWNER || user.role === UserRole.ADMIN) {
+      // Никаких дополнительных ограничений
+    } else {
+      // MANAGER и USER видят только согласования:
+      // 1. Созданные ими
+      // 2. Где они являются участниками
+      // 3. Привязанные к их проектам
+      where.OR = [
+        // Пользователь является создателем согласования
+        { creatorId: user.id },
+        // Пользователь является участником согласования
+        { assignments: { some: { userId: user.id } } },
+        // Согласование привязано к проекту, где пользователь участвует
+        {
+          project: {
+            OR: [
+              { creatorId: user.id },
+              { users: { some: { userId: user.id } } }
+            ]
+          }
+        },
+        // Согласование не привязано к проекту (общее)
+        { projectId: null }
+      ]
     }
 
     const [approvals, total] = await Promise.all([
@@ -134,6 +148,14 @@ export async function POST(request: NextRequest) {
       roles 
     } = body
 
+    // Если согласование привязано к проекту, проверяем доступ
+    if (projectId) {
+      const hasAccess = await canUserAccessProject(user.id, projectId, user.companyId, user.role)
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Нет доступа к этому проекту' }, { status: 403 })
+      }
+    }
+
     const approval = await prisma.approval.create({
       data: {
         id: generateId(),
@@ -215,6 +237,21 @@ export async function POST(request: NextRequest) {
         userId: user.id
       }
     })
+
+    // Отправляем уведомления участникам
+    if (assigneeIds && assigneeIds.length > 0) {
+      try {
+        await notifyNewApproval(
+          approval.id,
+          assigneeIds,
+          title,
+          approval.project?.name
+        )
+      } catch (notificationError) {
+        console.error('Error sending approval notifications:', notificationError)
+        // Не прерываем выполнение, если уведомления не отправились
+      }
+    }
 
     return NextResponse.json(approval, { status: 201 })
   } catch (error) {

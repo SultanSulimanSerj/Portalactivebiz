@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/layout'
 import { ArrowLeft, Edit, Users, FileText, Flag, DollarSign, Calendar, X, MessageSquare, Send, TrendingUp, TrendingDown, Percent, Plus, UserMinus } from 'lucide-react'
@@ -102,22 +102,13 @@ export default function ProjectDetailPage() {
     clientCorrespondentAccount: ''
   })
 
-  useEffect(() => {
-    if (params?.id) {
-      fetchProject()
-      fetchMessages()
-      fetchFinanceStats()
-      fetchEstimatesTotal()
-    }
-  }, [params?.id])
-
+  // Функции для загрузки данных
   const fetchProject = async () => {
     try {
       const response = await fetch(`/api/projects/${params?.id}`, {
       })
       if (response.ok) {
         const data = await response.json()
-        console.log('Project data:', data) // Отладочная информация
         setProject(data)
       } else {
         router.push('/projects')
@@ -130,7 +121,7 @@ export default function ProjectDetailPage() {
     }
   }
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const response = await fetch(`/api/projects/${params?.id}/messages`, {
       })
@@ -141,7 +132,29 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error(err)
     }
-  }
+  }, [params?.id])
+
+  // Загрузка данных при монтировании
+  useEffect(() => {
+    if (params?.id) {
+      fetchProject()
+      fetchMessages()
+      fetchFinanceStats()
+      fetchEstimatesTotal()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.id])
+
+  // Автообновление чата каждые 3 секунды
+  useEffect(() => {
+    if (!params?.id) return
+    
+    const interval = setInterval(() => {
+      fetchMessages()
+    }, 3000)
+    
+    return () => clearInterval(interval)
+  }, [params?.id, fetchMessages])
 
   const fetchFinanceStats = async () => {
     try {
@@ -525,7 +538,7 @@ export default function ProjectDetailPage() {
                 <FileText className="h-5 w-5 text-blue-600" />
               </div>
             </div>
-            <p className="text-sm font-medium text-blue-600">Создать договор</p>
+            <p className="text-sm font-medium text-blue-600">Создать документы</p>
             <p className="text-xs text-gray-600">Генерация документа →</p>
           </Link>
         </div>

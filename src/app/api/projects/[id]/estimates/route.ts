@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkPermission } from '@/lib/auth-middleware'
+import { checkPermission, canUserAccessProject } from '@/lib/auth-middleware'
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient() as any
@@ -13,6 +13,12 @@ export async function GET(
     
     if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
+    }
+
+    // Проверяем доступ к проекту
+    const hasAccess = await canUserAccessProject(user.id, params.id, user.companyId, user.role)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Нет доступа к этому проекту' }, { status: 403 })
     }
 
     const estimates = await prisma.estimate.findMany({
@@ -49,6 +55,12 @@ export async function POST(
     
     if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
+    }
+
+    // Проверяем доступ к проекту
+    const hasAccess = await canUserAccessProject(user.id, params.id, user.companyId, user.role)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Нет доступа к этому проекту' }, { status: 403 })
     }
 
     const body = await request.json()

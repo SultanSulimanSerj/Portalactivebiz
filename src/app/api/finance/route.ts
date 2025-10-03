@@ -58,9 +58,9 @@ export async function GET(request: NextRequest) {
       // Никаких дополнительных ограничений
     } else {
       // MANAGER и USER видят только финансовые записи проектов, где являются участниками
-      where.Project.OR = [
+      where.project.OR = [
         { creatorId: user.id }, // Пользователь создал проект
-        { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
+        { users: { some: { userId: user.id } } } // Пользователь является участником проекта
       ]
     }
 

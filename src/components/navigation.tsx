@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { 
@@ -17,10 +18,12 @@ import {
   Users,
   Settings,
   Menu,
-  X
+  X,
+  LogOut
 } from 'lucide-react'
 import { UserRole, getAvailableNavigationSections } from '@/lib/permissions'
 import Notifications from '@/components/notifications'
+import { signOut } from 'next-auth/react'
 
 interface NavigationItem {
   name: string
@@ -54,8 +57,8 @@ const navigation: NavigationItem[] = [
   { 
     name: 'Настройки', 
     href: '/settings', 
-    icon: Settings,
-    permission: 'canViewSystemSettings'
+    icon: Settings
+    // Убрали permission - теперь доступно всем
   },
 ]
 
@@ -69,19 +72,20 @@ export default function Navigation() {
   useEffect(() => {
     const fetchUserInfo = async () => {
       try {
-        const response = await fetch('/api/auth/session')
+        const response = await fetch('/api/users/me')
         if (response.ok) {
-          const session = await response.json()
-          if (session?.user) {
-            setUserRole(session.user.role as UserRole)
-            setUserInfo({
-              name: session.user.name || 'Пользователь',
-              email: session.user.email || 'user@example.com'
-            })
-          }
+          const data = await response.json()
+          setUserInfo({ name: data.name, email: data.email })
+          setUserRole(data.role || UserRole.USER)
+        } else {
+          // Если API не работает, показываем заглушку
+          console.error('Failed to fetch user info, status:', response.status)
+          setUserInfo({ name: 'Пользователь', email: 'user@example.com' })
         }
       } catch (error) {
-        console.error('Error fetching user info:', error)
+        console.error('Failed to fetch user info:', error)
+        // Показываем заглушку при ошибке
+        setUserInfo({ name: 'Пользователь', email: 'user@example.com' })
       }
     }
 
@@ -98,6 +102,10 @@ export default function Navigation() {
     const sectionName = item.href.replace('/', '') || 'dashboard'
     return availableSections.includes(sectionName)
   })
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/auth/signin' })
+  }
 
   return (
     <>
@@ -132,57 +140,69 @@ export default function Navigation() {
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
       `}>
-        <div className="p-6">
-          <div className="mb-8">
-            <h1 className="text-xl font-bold text-gray-900">Manexa</h1>
-            <p className="text-sm text-gray-600">Управление проектами</p>
-          </div>
-
-          <div className="space-y-2">
-            {filteredNavigation.map((item) => {
-              const isActive = pathname === item.href
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className={`
-                    flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                    ${isActive 
-                      ? 'bg-primary text-white' 
-                      : 'text-gray-700 hover:bg-gray-100'
-                    }
-                  `}
-                >
-                  <item.icon className="h-4 w-4 mr-3" />
-                  {item.name}
-                </Link>
-              )
-            })}
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="flex items-center">
-              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {userInfo?.name?.charAt(0)?.toUpperCase() || 'U'}
-                </span>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">
-                  {userInfo?.name || 'Пользователь'}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {userInfo?.email || 'user@example.com'}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {userRole === UserRole.OWNER && 'Владелец'}
-                  {userRole === UserRole.ADMIN && 'Администратор'}
-                  {userRole === UserRole.MANAGER && 'Менеджер'}
-                  {userRole === UserRole.USER && 'Пользователь'}
-                </p>
-              </div>
+        <div className="flex flex-col h-full">
+          <div className="p-6">
+            <div className="mb-8">
+              <Image 
+                src="/manexa-logo.png" 
+                alt="Manexa" 
+                width={120}
+                height={0}
+                style={{ height: 'auto' }}
+                className="mb-2"
+                priority
+              />
+              <p className="text-sm text-gray-600">Управление проектами</p>
             </div>
+
+            <div className="space-y-2">
+              {filteredNavigation.map((item) => {
+                const isActive = pathname === item.href
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                      ${isActive 
+                        ? 'bg-blue-50 text-blue-600' 
+                        : 'text-gray-700 hover:bg-gray-50'
+                      }
+                    `}
+                  >
+                    <item.icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                    <span className="text-sm font-medium">{item.name}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* User Profile at Bottom */}
+          <div className="mt-auto border-t border-gray-200">
+            {userInfo && (
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 font-medium text-sm">
+                      {userInfo.name?.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{userInfo.name}</p>
+                    <p className="text-xs text-gray-600 truncate">{userInfo.email}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Выйти
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </nav>

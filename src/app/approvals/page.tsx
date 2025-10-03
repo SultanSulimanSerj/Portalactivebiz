@@ -24,8 +24,8 @@ interface Approval {
   rejectedAt: string | null
   requireAllApprovals: boolean
   autoPublishOnApproval: boolean
-  Document: { id: string; title: string; isPublished: boolean } | null
-  Project: { id: string; name: string } | null
+  document: { id: string; title: string; isPublished: boolean } | null
+  project: { id: string; name: string } | null
   creator: { name: string }
   assignments: Array<{
     id: string
@@ -584,10 +584,10 @@ export default function ApprovalsPage() {
                               className="text-xs text-gray-500"
                             />
                           )}
-                          {approval.Document && (
+                          {approval.document && (
                             <div className="text-xs text-blue-600 mt-0.5">
-                              Документ: {approval.Document.title}
-                              {approval.Document.isPublished && (
+                              Документ: {approval.document.title}
+                              {approval.document.isPublished && (
                                 <span className="ml-1 text-green-600">✓ Опубликован</span>
                               )}
                             </div>
@@ -629,7 +629,7 @@ export default function ApprovalsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="text-sm text-gray-700">{approval.Project?.name || '—'}</div>
+                        <div className="text-sm text-gray-700">{approval.project?.name || '—'}</div>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded border ${getStatusColor(approval.status)}`}>
@@ -1007,11 +1007,11 @@ export default function ApprovalsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Проект</Label>
-                    <p className="text-sm text-gray-700">{selectedApproval.Project?.name || 'Не указан'}</p>
+                    <p className="text-sm text-gray-700">{selectedApproval.project?.name || 'Не указан'}</p>
                   </div>
                   <div>
                     <Label>Документ</Label>
-                    <p className="text-sm text-gray-700">{selectedApproval.Document?.title || 'Не указан'}</p>
+                    <p className="text-sm text-gray-700">{selectedApproval.document?.title || 'Не указан'}</p>
                   </div>
                 </div>
 

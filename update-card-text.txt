@@ -1,0 +1,8 @@
+В файле src/app/projects/[id]/page.tsx на строке 528 нужно изменить:
+
+БЫЛО:
+<p className="text-sm font-medium text-blue-600">Создать договор</p>
+
+ДОЛЖНО БЫТЬ:
+<p className="text-sm font-medium text-blue-600">Создать документы</p>
+

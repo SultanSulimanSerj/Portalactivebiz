@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
           project: {
             OR: [
               { creatorId: user.id }, // Пользователь создал проект
-              { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
+              { users: { some: { userId: user.id } } } // Пользователь является участником проекта
             ]
           }
         }

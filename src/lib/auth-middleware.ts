@@ -305,3 +305,38 @@ export function filterDataByPermissions<T extends { creatorId?: string; userId?:
   
   return []
 }
+
+// Вспомогательная функция для проверки доступа пользователя к проекту
+export async function canUserAccessProject(
+  userId: string,
+  projectId: string,
+  companyId: string,
+  userRole: UserRole
+): Promise<boolean> {
+  try {
+    // OWNER и ADMIN видят все проекты своей компании
+    if (userRole === UserRole.OWNER || userRole === UserRole.ADMIN) {
+      const project = await prisma.project.findFirst({
+        where: { id: projectId, companyId }
+      })
+      return !!project
+    }
+
+    // Для остальных проверяем, является ли пользователь создателем или участником
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        companyId,
+        OR: [
+          { creatorId: userId },
+          { users: { some: { userId } } }
+        ]
+      }
+    })
+
+    return !!project
+  } catch (error) {
+    console.error('Error checking project access:', error)
+    return false
+  }
+}

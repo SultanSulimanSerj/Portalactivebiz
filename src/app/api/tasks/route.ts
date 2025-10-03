@@ -40,14 +40,14 @@ export async function GET(request: NextRequest) {
       // Никаких дополнительных ограничений
     } else if (user.role === UserRole.MANAGER) {
       // MANAGER видит задачи проектов, где является участником
-      where.Project.OR = [
+      where.project.OR = [
         { creatorId: user.id }, // Пользователь создал проект
-        { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
+        { users: { some: { userId: user.id } } } // Пользователь является участником проекта
       ]
     } else {
       // USER видит только назначенные ему задачи
       where.OR = [
-        { TaskAssignment: { some: { userId: user.id } } }, // Назначенные задачи
+        { assignments: { some: { userId: user.id } } }, // Назначенные задачи
         { creatorId: user.id } // Созданные пользователем задачи
       ]
     }

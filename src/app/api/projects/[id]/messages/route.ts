@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { canUserAccessProject } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
+import { UserRole } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
@@ -11,6 +13,18 @@ export async function GET(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Проверяем доступ к проекту
+    const hasAccess = await canUserAccessProject(
+      user.id,
+      params.id,
+      user.companyId!,
+      (user.role || 'USER') as UserRole
+    )
+
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Нет доступа к этому проекту' }, { status: 403 })
     }
 
     const messages = await prisma.chatMessage.findMany({
@@ -43,6 +57,18 @@ export async function POST(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Проверяем доступ к проекту
+    const hasAccess = await canUserAccessProject(
+      user.id,
+      params.id,
+      user.companyId!,
+      (user.role || 'USER') as UserRole
+    )
+
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Нет доступа к этому проекту' }, { status: 403 })
     }
 
     const body = await request.json()
