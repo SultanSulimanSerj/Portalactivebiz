@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/layout'
 import { ArrowLeft, Edit, Users, FileText, Flag, DollarSign, Calendar, X, MessageSquare, Send, TrendingUp, TrendingDown, Percent, Plus, UserMinus } from 'lucide-react'
 import Link from 'next/link'
 import { PermissionButton } from '@/components/permission-guard'
+import { useSocket } from '@/contexts/SocketContext'
+import { useSession } from 'next-auth/react'
 
 interface ProjectDetail {
   id: string
@@ -17,7 +19,7 @@ interface ProjectDetail {
   startDate: string | null
   endDate: string | null
   creator: { name: string }
-  users: Array<{ user: { id: string; name: string } }>
+  users: Array<{ user: { id: string; name: string; email: string } }>
   _count: { tasks: number; documents: number; users: number }
   // Реквизиты клиента
   clientName?: string
@@ -40,7 +42,7 @@ interface Message {
   id: string
   content: string
   createdAt: string
-  user: { id: string; name: string }
+  user: { id: string; name: string; email: string }
 }
 
 interface FinanceStats {
@@ -67,6 +69,13 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [newMessage, setNewMessage] = useState('')
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
+  const [mentionSearch, setMentionSearch] = useState('')
+  const [cursorPosition, setCursorPosition] = useState(0)
+  const messageInputRef = React.useRef<HTMLInputElement>(null)
+  const { socket, isConnected } = useSocket()
+  const { data: session } = useSession()
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -145,16 +154,47 @@ export default function ProjectDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.id])
 
-  // Автообновление чата каждые 3 секунды
+  // WebSocket для реального времени чата
   useEffect(() => {
-    if (!params?.id) return
-    
-    const interval = setInterval(() => {
-      fetchMessages()
-    }, 3000)
-    
-    return () => clearInterval(interval)
-  }, [params?.id, fetchMessages])
+    if (!socket || !params?.id) return
+
+    const projectId = params.id as string
+
+    // Присоединяемся к комнате проекта
+    socket.emit('join-project', projectId)
+
+    // Слушаем новые сообщения
+    socket.on('new-message', (message: Message) => {
+      console.log('📨 Получено новое сообщение через WebSocket:', message)
+      setMessages((prev) => [...prev, message])
+    })
+
+    // Слушаем индикатор печати
+    socket.on('user-typing', (data: { userName: string; isTyping: boolean }) => {
+      if (data.isTyping) {
+        setTypingUsers((prev) => {
+          if (!prev.includes(data.userName)) {
+            return [...prev, data.userName]
+          }
+          return prev
+        })
+      } else {
+        setTypingUsers((prev) => prev.filter(name => name !== data.userName))
+      }
+      
+      // Автоматически убираем индикатор через 3 секунды
+      setTimeout(() => {
+        setTypingUsers((prev) => prev.filter(name => name !== data.userName))
+      }, 3000)
+    })
+
+    // Cleanup при размонтировании
+    return () => {
+      socket.emit('leave-project', projectId)
+      socket.off('new-message')
+      socket.off('user-typing')
+    }
+  }, [socket, params?.id])
 
   const fetchFinanceStats = async () => {
     try {
@@ -355,23 +395,164 @@ export default function ProjectDetailPage() {
     if (!newMessage.trim()) return
 
     try {
+      // Останавливаем индикатор печати
+      if (socket && params?.id) {
+        socket.emit('typing', {
+          projectId: params.id,
+          userName: session?.user?.name || 'Пользователь',
+          isTyping: false
+        })
+      }
+
+      // Извлекаем упоминания из сообщения
+      const mentionRegex = /@(\w+(?:\s+\w+)?)/g
+      const mentions = []
+      let match
+      while ((match = mentionRegex.exec(newMessage)) !== null) {
+        mentions.push(match[1])
+      }
+
       const response = await fetch(`/api/projects/${params?.id}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: newMessage
+          content: newMessage,
+          mentions: mentions // Передаём упоминания в API
         })
       })
 
       if (response.ok) {
         setNewMessage('')
-        fetchMessages()
+        setShowMentionSuggestions(false)
+        // Не нужно вызывать fetchMessages - сообщение придёт через WebSocket
       }
     } catch (err) {
       console.error(err)
     }
+  }
+
+  // Обработчик печати для индикатора "печатает..."
+  const handleTyping = () => {
+    if (socket && params?.id && newMessage.trim()) {
+      socket.emit('typing', {
+        projectId: params.id,
+        userName: session?.user?.name || 'Пользователь',
+        isTyping: true
+      })
+    }
+  }
+
+  // Обработка ввода сообщения с упоминаниями
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    const cursorPos = e.target.selectionStart || 0
+    
+    setNewMessage(value)
+    setCursorPosition(cursorPos)
+    handleTyping()
+
+    // Проверяем, есть ли @ перед курсором
+    const textBeforeCursor = value.substring(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+      // Проверяем, что после @ нет пробелов
+      if (!textAfterAt.includes(' ') && textAfterAt.length >= 0) {
+        setMentionSearch(textAfterAt.toLowerCase())
+        setShowMentionSuggestions(true)
+      } else {
+        setShowMentionSuggestions(false)
+      }
+    } else {
+      setShowMentionSuggestions(false)
+    }
+  }
+
+  // Вставка упоминания пользователя
+  const insertMention = (userName: string) => {
+    const textBeforeCursor = newMessage.substring(0, cursorPosition)
+    const textAfterCursor = newMessage.substring(cursorPosition)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (lastAtIndex !== -1) {
+      const newText = 
+        textBeforeCursor.substring(0, lastAtIndex) + 
+        `@${userName} ` + 
+        textAfterCursor
+      
+      setNewMessage(newText)
+      setShowMentionSuggestions(false)
+      
+      // Возвращаем фокус на input
+      setTimeout(() => {
+        messageInputRef.current?.focus()
+      }, 0)
+    }
+  }
+
+  // Фильтрация пользователей для упоминаний
+  const getMentionSuggestions = () => {
+    if (!project?.users) return []
+    
+    return project.users
+      .filter(member => 
+        member.user.name.toLowerCase().includes(mentionSearch) ||
+        member.user.email.toLowerCase().includes(mentionSearch)
+      )
+      .slice(0, 5) // Показываем максимум 5 подсказок
+  }
+
+  // Форматирование сообщения с подсветкой упоминаний
+  const formatMessageWithMentions = (content: string) => {
+    // Регулярное выражение для поиска @упоминаний
+    const mentionRegex = /@(\w+(?:\s+\w+)?)/g
+    const parts = []
+    let lastIndex = 0
+    let match
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      // Добавляем текст перед упоминанием
+      if (match.index > lastIndex) {
+        parts.push(
+          <span key={`text-${lastIndex}`}>
+            {content.substring(lastIndex, match.index)}
+          </span>
+        )
+      }
+
+      // Добавляем упоминание с подсветкой
+      const currentUserName = session?.user?.name
+      const isMentioningMe = match[1] === currentUserName
+
+      parts.push(
+        <span
+          key={`mention-${match.index}`}
+          className={`${
+            isMentioningMe 
+              ? 'bg-blue-200 text-blue-900 font-semibold' 
+              : 'bg-blue-100 text-blue-700 font-medium'
+          } px-1 rounded`}
+        >
+          @{match[1]}
+        </span>
+      )
+
+      lastIndex = match.index + match[0].length
+    }
+
+    // Добавляем оставшийся текст
+    if (lastIndex < content.length) {
+      parts.push(
+        <span key={`text-${lastIndex}`}>
+          {content.substring(lastIndex)}
+        </span>
+      )
+    }
+
+    return parts.length > 0 ? parts : content
   }
 
   const getStatusText = (status: string) => {
@@ -844,7 +1025,7 @@ export default function ProjectDetailPage() {
                           {new Date(message.createdAt).toLocaleString('ru-RU')}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-700">{message.content}</p>
+                      <p className="text-sm text-gray-700">{formatMessageWithMentions(message.content)}</p>
                     </div>
                   </div>
                 ))}
@@ -853,12 +1034,67 @@ export default function ProjectDetailPage() {
           </div>
           
           <form onSubmit={handleSendMessage} className="p-6 border-t">
-            <div className="flex gap-3">
+            {/* Индикатор печати */}
+            {typingUsers.length > 0 && (
+              <div className="px-3 py-2 mb-2 text-xs text-gray-500 italic">
+                {typingUsers.join(', ')} {typingUsers.length === 1 ? 'печатает' : 'печатают'}...
+              </div>
+            )}
+            
+            {/* Индикатор подключения WebSocket */}
+            <div className="px-3 mb-2 flex items-center gap-2 text-xs">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+              <span className="text-gray-500">
+                {isConnected ? 'Подключено' : 'Подключение...'}
+              </span>
+            </div>
+
+            <div className="relative flex gap-3">
+              {/* Автокомплит для упоминаний */}
+              {showMentionSuggestions && getMentionSuggestions().length > 0 && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  <div className="p-2 border-b border-gray-100">
+                    <p className="text-xs text-gray-500 font-medium">Упомянуть пользователя</p>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {getMentionSuggestions().map((member) => (
+                      <button
+                        key={member.user.id}
+                        type="button"
+                        onClick={() => insertMention(member.user.name)}
+                        className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                      >
+                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs text-white font-medium">
+                            {member.user.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {member.user.name}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {member.user.email}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <input
+                ref={messageInputRef}
                 type="text"
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Написать сообщение..."
+                onChange={handleMessageChange}
+                onKeyDown={(e) => {
+                  // Закрыть подсказки по Escape
+                  if (e.key === 'Escape') {
+                    setShowMentionSuggestions(false)
+                  }
+                }}
+                placeholder="Написать сообщение... (используйте @ для упоминания)"
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button

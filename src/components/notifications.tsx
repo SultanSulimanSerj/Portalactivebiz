@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Bell, X, Check, AlertCircle, Info, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useSocket } from '@/contexts/SocketContext'
+import { useSession } from 'next-auth/react'
 
 interface Notification {
   id: string
@@ -22,6 +24,8 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const previousCountRef = useRef<number>(0)
+  const { socket } = useSocket()
+  const { data: session } = useSession()
 
   // Функция для воспроизведения звука
   const playNotificationSound = () => {
@@ -79,6 +83,33 @@ export default function Notifications() {
     
     return () => clearInterval(interval)
   }, [])
+
+  // WebSocket для мгновенных уведомлений
+  useEffect(() => {
+    if (!socket || !session?.user?.id) return
+
+    // Присоединяемся к комнате пользователя
+    socket.emit('join-user', session.user.id)
+    console.log('👤 Присоединились к комнате пользователя для уведомлений')
+
+    // Слушаем новые уведомления
+    socket.on('notification', (notification: Notification) => {
+      console.log('🔔 Получено уведомление через WebSocket:', notification)
+      
+      // Добавляем уведомление в список
+      setNotifications((prev) => [notification, ...prev])
+      
+      // Воспроизводим звук
+      playNotificationSound()
+      
+      // Обновляем счётчик
+      previousCountRef.current = previousCountRef.current + 1
+    })
+
+    return () => {
+      socket.off('notification')
+    }
+  }, [socket, session?.user?.id])
 
   const fetchNotifications = async () => {
     try {

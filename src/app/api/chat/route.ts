@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
           project: {
             OR: [
               { creatorId: user.id }, // Пользователь создал проект
-              { ProjectUser: { some: { userId: user.id } } } // Пользователь является участником проекта
+              { users: { some: { userId: user.id } } } // Пользователь является участником проекта
             ]
           }
         }
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { content, projectId, attachments } = body
+    const { content, projectId, mentions } = body
 
     const message = await prisma.chatMessage.create({
       data: {
@@ -107,35 +107,69 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Проверяем упоминания в сообщении (@username)
-    const mentionRegex = /@(\w+)/g
-    const mentions = content.match(mentionRegex)
-    
+    // Отправляем через WebSocket
+    try {
+      const io = (global as any).io
+      if (io) {
+        if (projectId) {
+          // Отправка в комнату проекта
+          io.to(`project:${projectId}`).emit('new-message', message)
+          console.log(`📨 Сообщение отправлено через WebSocket в проект ${projectId}`)
+        } else {
+          // Отправка в общий чат всем пользователям компании
+          io.emit('new-message', message)
+          console.log(`📨 Сообщение отправлено через WebSocket в общий чат`)
+        }
+      }
+    } catch (socketError) {
+      console.error('Ошибка отправки через WebSocket:', socketError)
+    }
+
+    // Отправляем уведомления упомянутым пользователям
     if (mentions && mentions.length > 0) {
       try {
-        // Получаем пользователей компании для поиска упоминаний
-        const companyUsers = await prisma.user.findMany({
-          where: { companyId: user.companyId },
-          select: { id: true, name: true, email: true }
+        const mentionedUsers = await prisma.user.findMany({
+          where: {
+            name: { in: mentions },
+            companyId: user.companyId,
+            id: { not: user.id }
+          },
+          select: { id: true, name: true }
         })
 
-        const mentionedUserIds: string[] = []
-        
-        for (const mention of mentions) {
-          const username = mention.substring(1) // Убираем @
-          const mentionedUser = companyUsers.find(u => 
-            u.name?.toLowerCase().includes(username.toLowerCase()) ||
-            u.email?.toLowerCase().includes(username.toLowerCase())
+        if (mentionedUsers.length > 0) {
+          const notifications = await Promise.all(
+            mentionedUsers.map(mentionedUser =>
+              prisma.notification.create({
+                data: {
+                  userId: mentionedUser.id,
+                  title: 'Вас упомянули в чате',
+                  message: `${user.name} упомянул вас${projectId && message.project ? ` в проекте "${message.project.name}"` : ''}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+                  type: 'INFO',
+                  projectId: projectId || null,
+                  actionType: projectId ? 'project' : 'chat',
+                  actionId: projectId || message.id
+                }
+              })
+            )
           )
-          if (mentionedUser && mentionedUser.id !== user.id) {
-            mentionedUserIds.push(mentionedUser.id)
+          
+          // Отправляем уведомления через WebSocket для мгновенной доставки
+          try {
+            const io = (global as any).io
+            if (io) {
+              notifications.forEach((notification, index) => {
+                io.to(`user:${mentionedUsers[index].id}`).emit('notification', notification)
+              })
+            }
+          } catch (wsError) {
+            console.error('Ошибка отправки уведомлений через WebSocket:', wsError)
           }
+          
+          console.log(`🔔 Отправлены уведомления об упоминании для ${mentionedUsers.length} пользователей`)
         }
-
-        // Уведомления отключены для упрощения
       } catch (notificationError) {
-        console.error('Error sending chat mention notifications:', notificationError)
-        // Не прерываем отправку сообщения из-за ошибки уведомлений
+        console.error('Ошибка отправки уведомлений об упоминании:', notificationError)
       }
     }
 

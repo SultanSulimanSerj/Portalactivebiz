@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Send, Paperclip, Smile, MoreVertical } from 'lucide-react'
 import Layout from '@/components/layout'
+import { useSocket } from '@/contexts/SocketContext'
+import { useSession } from 'next-auth/react'
 
 interface Message {
   id: string
@@ -26,35 +28,116 @@ interface Message {
 interface Project {
   id: string
   name: string
+  users?: Array<{ user: { id: string; name: string; email: string } }>
+}
+
+interface User {
+  id: string
+  name: string
+  email: string
 }
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [allUsers, setAllUsers] = useState<User[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
+  const [mentionSearch, setMentionSearch] = useState('')
+  const [cursorPosition, setCursorPosition] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messageInputRef = useRef<HTMLInputElement>(null)
+  const { socket, isConnected } = useSocket()
+  const { data: session } = useSession()
 
   useEffect(() => {
     fetchProjects()
     fetchMessages()
+    fetchAllUsers()
   }, [])
 
   useEffect(() => {
     fetchMessages()
   }, [selectedProject])
 
-  // Автоматическое обновление сообщений каждые 3 секунды
+  // WebSocket для реального времени
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchMessages()
-    }, 3000)
+    if (!socket) {
+      console.log('⚠️ Socket не инициализирован')
+      return
+    }
 
-    return () => clearInterval(interval)
-  }, [selectedProject])
+    console.log('🔌 WebSocket эффект запущен, проект:', selectedProject || 'общий чат')
+
+    // Если выбран проект, присоединяемся к его комнате
+    if (selectedProject) {
+      console.log('📁 Присоединение к проекту:', selectedProject)
+      socket.emit('join-project', selectedProject)
+    }
+
+    // Слушаем новые сообщения
+    const handleNewMessage = (message: Message) => {
+      console.log('📨 Получено сообщение через WebSocket:', {
+        messageId: message.id,
+        projectId: message.project?.id,
+        currentFilter: selectedProject || 'общий чат'
+      })
+      
+      // Проверяем, относится ли сообщение к текущему фильтру
+      if (selectedProject) {
+        if (message.project?.id === selectedProject) {
+          console.log('✅ Добавляем сообщение в список (проект совпадает)')
+          setMessages((prev) => [...prev, message])
+        } else {
+          console.log('⏭️ Пропускаем сообщение (другой проект)')
+        }
+      } else {
+        // Общий чат - сообщения без проекта
+        if (!message.project) {
+          console.log('✅ Добавляем сообщение в общий чат')
+          setMessages((prev) => [...prev, message])
+        } else {
+          console.log('⏭️ Пропускаем сообщение (есть проект)')
+        }
+      }
+    }
+
+    socket.on('new-message', handleNewMessage)
+    console.log('👂 Слушаем события new-message')
+
+    // Слушаем индикатор печати
+    socket.on('user-typing', (data: { userName: string; isTyping: boolean }) => {
+      if (data.isTyping) {
+        setTypingUsers((prev) => {
+          if (!prev.includes(data.userName)) {
+            return [...prev, data.userName]
+          }
+          return prev
+        })
+      } else {
+        setTypingUsers((prev) => prev.filter(name => name !== data.userName))
+      }
+      
+      setTimeout(() => {
+        setTypingUsers((prev) => prev.filter(name => name !== data.userName))
+      }, 3000)
+    })
+
+    // Cleanup
+    return () => {
+      console.log('🧹 Cleanup WebSocket')
+      if (selectedProject) {
+        socket.emit('leave-project', selectedProject)
+      }
+      socket.off('new-message', handleNewMessage)
+      socket.off('user-typing')
+    }
+  }, [socket, selectedProject])
 
   useEffect(() => {
     scrollToBottom()
@@ -66,13 +149,41 @@ export default function ChatPage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects')
+      const response = await fetch('/api/projects?limit=100')
       if (response.ok) {
         const data = await response.json()
-        setProjects(data.projects || [])
+        // Загружаем проекты с участниками для упоминаний
+        const projectsWithUsers = await Promise.all(
+          (data.projects || []).map(async (project: Project) => {
+            try {
+              const projectResponse = await fetch(`/api/projects/${project.id}`)
+              if (projectResponse.ok) {
+                const projectData = await projectResponse.json()
+                return { ...project, users: projectData.users }
+              }
+              return project
+            } catch {
+              return project
+            }
+          })
+        )
+        setProjects(projectsWithUsers)
       }
     } catch (err) {
       console.error('Error fetching projects:', err)
+    }
+  }
+
+  const fetchAllUsers = async () => {
+    try {
+      const response = await fetch('/api/users?limit=100')
+      if (response.ok) {
+        const data = await response.json()
+        setAllUsers(data.users || [])
+        console.log('👥 Загружено пользователей:', data.users?.length || 0)
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err)
     }
   }
 
@@ -98,11 +209,173 @@ export default function ChatPage() {
     }
   }
 
+  // Обработка ввода сообщения с упоминаниями
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    const cursorPos = e.target.selectionStart || 0
+    
+    setNewMessage(value)
+    setCursorPosition(cursorPos)
+
+    // Отправляем индикатор печати
+    if (socket && selectedProject && value.trim()) {
+      socket.emit('typing', {
+        projectId: selectedProject,
+        userName: session?.user?.name || 'Пользователь',
+        isTyping: true
+      })
+    }
+
+    // Проверяем упоминания
+    const textBeforeCursor = value.substring(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+      if (!textAfterAt.includes(' ') && textAfterAt.length >= 0) {
+        setMentionSearch(textAfterAt.toLowerCase())
+        setShowMentionSuggestions(true)
+      } else {
+        setShowMentionSuggestions(false)
+      }
+    } else {
+      setShowMentionSuggestions(false)
+    }
+  }
+
+  // Вставка упоминания
+  const insertMention = (userName: string) => {
+    const textBeforeCursor = newMessage.substring(0, cursorPosition)
+    const textAfterCursor = newMessage.substring(cursorPosition)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (lastAtIndex !== -1) {
+      const newText = 
+        textBeforeCursor.substring(0, lastAtIndex) + 
+        `@${userName} ` + 
+        textAfterCursor
+      
+      setNewMessage(newText)
+      setShowMentionSuggestions(false)
+      
+      setTimeout(() => {
+        messageInputRef.current?.focus()
+      }, 0)
+    }
+  }
+
+  // Получить подсказки для упоминаний
+  const getMentionSuggestions = () => {
+    if (selectedProject) {
+      // Для выбранного проекта - показываем участников проекта
+      const currentProject = projects.find(p => p.id === selectedProject)
+      
+      console.log('🔍 Поиск подсказок (проект):', {
+        selectedProject,
+        currentProject: currentProject?.name,
+        hasUsers: !!currentProject?.users,
+        usersCount: currentProject?.users?.length || 0,
+        mentionSearch
+      })
+      
+      if (!currentProject?.users) return []
+      
+      const filtered = currentProject.users
+        .filter(member => 
+          member.user.name.toLowerCase().includes(mentionSearch) ||
+          member.user.email.toLowerCase().includes(mentionSearch)
+        )
+        .slice(0, 5)
+      
+      console.log('✅ Найдено подсказок:', filtered.length)
+      return filtered.map(m => ({ user: m.user }))
+    } else {
+      // Для общего чата - показываем всех пользователей компании
+      console.log('🔍 Поиск подсказок (общий чат):', {
+        allUsersCount: allUsers.length,
+        mentionSearch
+      })
+      
+      const filtered = allUsers
+        .filter(user => 
+          user.name.toLowerCase().includes(mentionSearch) ||
+          user.email.toLowerCase().includes(mentionSearch)
+        )
+        .slice(0, 5)
+      
+      console.log('✅ Найдено подсказок:', filtered.length)
+      return filtered.map(u => ({ user: u }))
+    }
+  }
+
+  // Форматирование с упоминаниями
+  const formatMessageWithMentions = (content: string) => {
+    const mentionRegex = /@(\w+(?:\s+\w+)?)/g
+    const parts = []
+    let lastIndex = 0
+    let match
+
+    while ((match = mentionRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(
+          <span key={`text-${lastIndex}`}>
+            {content.substring(lastIndex, match.index)}
+          </span>
+        )
+      }
+
+      const currentUserName = session?.user?.name
+      const isMentioningMe = match[1] === currentUserName
+
+      parts.push(
+        <span
+          key={`mention-${match.index}`}
+          className={`${
+            isMentioningMe 
+              ? 'bg-blue-200 text-blue-900 font-semibold' 
+              : 'bg-blue-100 text-blue-700 font-medium'
+          } px-1 rounded`}
+        >
+          @{match[1]}
+        </span>
+      )
+
+      lastIndex = match.index + match[0].length
+    }
+
+    if (lastIndex < content.length) {
+      parts.push(
+        <span key={`text-${lastIndex}`}>
+          {content.substring(lastIndex)}
+        </span>
+      )
+    }
+
+    return parts.length > 0 ? parts : content
+  }
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || sending) return
 
     setSending(true)
     try {
+      // Останавливаем индикатор печати
+      if (socket && selectedProject) {
+        socket.emit('typing', {
+          projectId: selectedProject,
+          userName: session?.user?.name || 'Пользователь',
+          isTyping: false
+        })
+      }
+
+      // Извлекаем упоминания
+      const mentionRegex = /@(\w+(?:\s+\w+)?)/g
+      const mentions = []
+      let match
+      while ((match = mentionRegex.exec(newMessage)) !== null) {
+        mentions.push(match[1])
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -110,16 +383,15 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           content: newMessage,
-          projectId: selectedProject || null
+          projectId: selectedProject || null,
+          mentions: mentions
         })
       })
 
       if (response.ok) {
-        const newMsg = await response.json()
-        setMessages([...messages, newMsg])
         setNewMessage('')
-        // Дополнительно обновляем сообщения с сервера
-        setTimeout(() => fetchMessages(), 100)
+        setShowMentionSuggestions(false)
+        // Сообщение придёт через WebSocket
       }
     } catch (err) {
       console.error('Error sending message:', err)
@@ -245,7 +517,7 @@ export default function ChatPage() {
                         )}
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3">
-                        <p className="text-sm">{message.content}</p>
+                        <p className="text-sm">{formatMessageWithMentions(message.content)}</p>
                         {message.attachments && message.attachments.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {message.attachments.map((attachment, idx) => (
@@ -271,6 +543,21 @@ export default function ChatPage() {
 
         {/* Message Input */}
         <div className="border-t p-4">
+          {/* Индикатор печати */}
+          {typingUsers.length > 0 && (
+            <div className="px-3 py-2 mb-2 text-xs text-gray-500 italic">
+              {typingUsers.join(', ')} {typingUsers.length === 1 ? 'печатает' : 'печатают'}...
+            </div>
+          )}
+          
+          {/* Индикатор WebSocket */}
+          <div className="px-3 mb-2 flex items-center gap-2 text-xs">
+            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span className="text-gray-500">
+              {isConnected ? 'Подключено' : 'Подключение...'}
+            </span>
+          </div>
+
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm">
               <Paperclip className="h-4 w-4" />
@@ -278,12 +565,51 @@ export default function ChatPage() {
             <Button variant="ghost" size="sm">
               <Smile className="h-4 w-4" />
             </Button>
-            <div className="flex-1">
+            <div className="flex-1 relative">
+              {/* Автокомплит для упоминаний */}
+              {showMentionSuggestions && getMentionSuggestions().length > 0 && (
+                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  <div className="p-2 border-b border-gray-100">
+                    <p className="text-xs text-gray-500 font-medium">Упомянуть пользователя</p>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {getMentionSuggestions().map((member) => (
+                      <button
+                        key={member.user.id}
+                        type="button"
+                        onClick={() => insertMention(member.user.name)}
+                        className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                      >
+                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs text-white font-medium">
+                            {member.user.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {member.user.name}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {member.user.email}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               <Input
+                ref={messageInputRef}
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
+                onChange={handleMessageChange}
                 onKeyPress={handleKeyPress}
-                placeholder="Напишите сообщение..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setShowMentionSuggestions(false)
+                  }
+                }}
+                placeholder="Напишите сообщение... (используйте @ для упоминания)"
                 disabled={sending}
               />
             </div>

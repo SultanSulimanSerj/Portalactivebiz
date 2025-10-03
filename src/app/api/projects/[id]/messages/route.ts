@@ -72,7 +72,7 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { content } = body
+    const { content, mentions } = body
 
     if (!content || !content.trim()) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 })
@@ -96,6 +96,62 @@ export async function POST(
         }
       }
     })
+
+    // Отправляем сообщение через WebSocket всем участникам проекта
+    try {
+      const io = (global as any).io
+      if (io) {
+        io.to(`project:${params.id}`).emit('new-message', message)
+        console.log(`📨 Сообщение отправлено через WebSocket в проект ${params.id}`)
+      }
+    } catch (socketError) {
+      console.error('Ошибка отправки через WebSocket:', socketError)
+      // Не прерываем выполнение, если WebSocket не работает
+    }
+
+    // Отправляем уведомления упомянутым пользователям
+    if (mentions && mentions.length > 0) {
+      try {
+        // Получаем проект для названия
+        const project = await prisma.project.findUnique({
+          where: { id: params.id },
+          select: { name: true }
+        })
+
+        // Находим пользователей по именам
+        const mentionedUsers = await prisma.user.findMany({
+          where: {
+            name: { in: mentions },
+            companyId: user.companyId,
+            id: { not: user.id } // Не отправляем уведомление самому себе
+          },
+          select: { id: true, name: true }
+        })
+
+        // Создаём уведомления для упомянутых пользователей
+        if (mentionedUsers.length > 0) {
+          await Promise.all(
+            mentionedUsers.map(mentionedUser =>
+              prisma.notification.create({
+                data: {
+                  userId: mentionedUser.id,
+                  title: 'Вас упомянули в чате',
+                  message: `${user.name} упомянул вас в проекте "${project?.name}": ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+                  type: 'INFO',
+                  projectId: params.id,
+                  actionType: 'project',
+                  actionId: params.id
+                }
+              })
+            )
+          )
+          console.log(`🔔 Отправлены уведомления об упоминании для ${mentionedUsers.length} пользователей`)
+        }
+      } catch (notificationError) {
+        console.error('Ошибка отправки уведомлений об упоминании:', notificationError)
+        // Не прерываем выполнение
+      }
+    }
 
     return NextResponse.json(message, { status: 201 })
   } catch (error) {
