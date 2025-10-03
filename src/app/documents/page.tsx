@@ -16,8 +16,9 @@ interface Document {
   mimeType: string
   version: number
   createdAt: string
-  Project: { id: string; name: string } | null
-  User: { id: string; name: string; email: string }
+  projectId: string | null
+  project: { id: string; name: string } | null
+  creator: { id: string; name: string; email: string }
 }
 
 export default function DocumentsPage() {
@@ -176,7 +177,7 @@ export default function DocumentsPage() {
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesProject = !projectIdFromUrl || doc.Project?.name === currentProject?.name
+    const matchesProject = !projectIdFromUrl || doc.project?.id === projectIdFromUrl
     return matchesSearch && matchesProject
   })
 
@@ -275,12 +276,12 @@ export default function DocumentsPage() {
                       <div className="text-sm text-gray-700">{formatFileSize(doc.fileSize)}</div>
                     </td>
                     <td className="px-4 py-3">
-                      {doc.Project ? (
+                      {doc.project ? (
                         <Link 
-                          href={`/projects/${doc.Project.id}`}
+                          href={`/projects/${doc.project.id}`}
                           className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                         >
-                          {doc.Project.name}
+                          {doc.project.name}
                         </Link>
                       ) : (
                         <span className="text-sm text-gray-500">—</span>

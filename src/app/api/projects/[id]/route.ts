@@ -46,6 +46,21 @@ export async function GET(
         endDate: true,
         createdAt: true,
         updatedAt: true,
+        // Данные клиента
+        clientName: true,
+        clientLegalName: true,
+        clientInn: true,
+        clientKpp: true,
+        clientOgrn: true,
+        clientLegalAddress: true,
+        clientActualAddress: true,
+        clientDirectorName: true,
+        clientContactPhone: true,
+        clientContactEmail: true,
+        clientBankAccount: true,
+        clientBankName: true,
+        clientBankBik: true,
+        clientCorrespondentAccount: true,
         creator: {
           select: { id: true, name: true, email: true }
         },
@@ -85,7 +100,30 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, description, startDate, endDate, budget, priority, status } = body
+    const { 
+      name, 
+      description, 
+      startDate, 
+      endDate, 
+      budget, 
+      priority, 
+      status,
+      // Данные клиента
+      clientName,
+      clientLegalName,
+      clientInn,
+      clientKpp,
+      clientOgrn,
+      clientLegalAddress,
+      clientActualAddress,
+      clientDirectorName,
+      clientContactPhone,
+      clientContactEmail,
+      clientBankAccount,
+      clientBankName,
+      clientBankBik,
+      clientCorrespondentAccount
+    } = body
 
     // Обновляем проект и финансовую запись в транзакции
     const result = await prisma.$transaction(async (tx) => {
@@ -102,7 +140,22 @@ export async function PUT(
           ...(endDate && { endDate: new Date(endDate) }),
           ...(budget && { budget: parseFloat(budget) }),
           ...(priority && { priority }),
-          ...(status && { status })
+          ...(status && { status }),
+          // Данные клиента
+          ...(clientName !== undefined && { clientName }),
+          ...(clientLegalName !== undefined && { clientLegalName }),
+          ...(clientInn !== undefined && { clientInn }),
+          ...(clientKpp !== undefined && { clientKpp }),
+          ...(clientOgrn !== undefined && { clientOgrn }),
+          ...(clientLegalAddress !== undefined && { clientLegalAddress }),
+          ...(clientActualAddress !== undefined && { clientActualAddress }),
+          ...(clientDirectorName !== undefined && { clientDirectorName }),
+          ...(clientContactPhone !== undefined && { clientContactPhone }),
+          ...(clientContactEmail !== undefined && { clientContactEmail }),
+          ...(clientBankAccount !== undefined && { clientBankAccount }),
+          ...(clientBankName !== undefined && { clientBankName }),
+          ...(clientBankBik !== undefined && { clientBankBik }),
+          ...(clientCorrespondentAccount !== undefined && { clientCorrespondentAccount })
         },
         include: {
           creator: {

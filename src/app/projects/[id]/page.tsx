@@ -83,6 +83,24 @@ export default function ProjectDetailPage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [selectedMember, setSelectedMember] = useState<User | null>(null)
   const [estimatesTotal, setEstimatesTotal] = useState<number>(0)
+  const [showClientModal, setShowClientModal] = useState(false)
+  const [isClientSectionExpanded, setIsClientSectionExpanded] = useState(false)
+  const [clientFormData, setClientFormData] = useState({
+    clientName: '',
+    clientLegalName: '',
+    clientInn: '',
+    clientKpp: '',
+    clientOgrn: '',
+    clientLegalAddress: '',
+    clientActualAddress: '',
+    clientDirectorName: '',
+    clientContactPhone: '',
+    clientContactEmail: '',
+    clientBankAccount: '',
+    clientBankName: '',
+    clientBankBik: '',
+    clientCorrespondentAccount: ''
+  })
 
   useEffect(() => {
     if (params?.id) {
@@ -233,6 +251,50 @@ export default function ProjectDetailPage() {
   const handleShowContact = (member: any) => {
     setSelectedMember(member.user)
     setShowContactModal(true)
+  }
+
+  const handleEditClient = () => {
+    if (!project) return
+    
+    setClientFormData({
+      clientName: project.clientName || '',
+      clientLegalName: project.clientLegalName || '',
+      clientInn: project.clientInn || '',
+      clientKpp: project.clientKpp || '',
+      clientOgrn: project.clientOgrn || '',
+      clientLegalAddress: project.clientLegalAddress || '',
+      clientActualAddress: project.clientActualAddress || '',
+      clientDirectorName: project.clientDirectorName || '',
+      clientContactPhone: project.clientContactPhone || '',
+      clientContactEmail: project.clientContactEmail || '',
+      clientBankAccount: project.clientBankAccount || '',
+      clientBankName: project.clientBankName || '',
+      clientBankBik: project.clientBankBik || '',
+      clientCorrespondentAccount: project.clientCorrespondentAccount || ''
+    })
+    setShowClientModal(true)
+  }
+
+  const handleSaveClient = async () => {
+    try {
+      const response = await fetch(`/api/projects/${params?.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientFormData)
+      })
+      
+      if (response.ok) {
+        await fetchProject()
+        setShowClientModal(false)
+        alert('Данные клиента обновлены!')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Ошибка при сохранении')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Ошибка при сохранении данных клиента')
+    }
   }
 
   const handleEdit = () => {
@@ -516,6 +578,124 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
+        {/* Client Details */}
+        <div className="bg-white rounded-lg border">
+          <div 
+            className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={() => setIsClientSectionExpanded(!isClientSectionExpanded)}
+          >
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">Данные клиента</h2>
+              {project.clientName && (
+                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded">
+                  Заполнено
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {project.clientName && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleEditClient()
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-1 hover:bg-blue-50 rounded"
+                >
+                  <Edit className="h-4 w-4" />
+                  Редактировать
+                </button>
+              )}
+              <div className="transition-transform duration-200" style={{ transform: isClientSectionExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          {isClientSectionExpanded && (
+            <div className="px-6 pb-6 border-t">
+              {project.clientName ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
+              {project.clientName && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Название клиента</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientName}</p>
+                </div>
+              )}
+              {project.clientLegalName && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Юридическое наименование</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientLegalName}</p>
+                </div>
+              )}
+              {project.clientInn && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">ИНН</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientInn}</p>
+                </div>
+              )}
+              {project.clientKpp && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">КПП</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientKpp}</p>
+                </div>
+              )}
+              {project.clientOgrn && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">ОГРН</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientOgrn}</p>
+                </div>
+              )}
+              {project.clientDirectorName && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Директор</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientDirectorName}</p>
+                </div>
+              )}
+              {project.clientContactPhone && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Телефон</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientContactPhone}</p>
+                </div>
+              )}
+              {project.clientContactEmail && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Email</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientContactEmail}</p>
+                </div>
+              )}
+              {project.clientLegalAddress && (
+                <div className="md:col-span-2">
+                  <p className="text-sm text-gray-500 mb-1">Юридический адрес</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientLegalAddress}</p>
+                </div>
+              )}
+              {project.clientActualAddress && (
+                <div className="md:col-span-2">
+                  <p className="text-sm text-gray-500 mb-1">Фактический адрес</p>
+                  <p className="text-sm font-medium text-gray-900">{project.clientActualAddress}</p>
+                </div>
+              )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-sm text-gray-500 mb-3">Данные клиента не заполнены</p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleEditClient()
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                  >
+                    Добавить данные клиента
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Details */}
         <div className="bg-white rounded-lg border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Детали проекта</h2>
@@ -564,48 +744,6 @@ export default function ProjectDetailPage() {
             <div className="mt-6">
               <p className="text-sm text-gray-500 mb-2">Описание</p>
               <p className="text-sm text-gray-900">{project.description}</p>
-            </div>
-          )}
-
-          {/* Реквизиты клиента */}
-          {project.clientName && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-gray-500">Реквизиты клиента</p>
-                <Link
-                  href={`/projects/${project.id}/client-requisites`}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Редактировать
-                </Link>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{project.clientName}</p>
-                    {project.clientLegalName && (
-                      <p className="text-xs text-gray-600 mt-1">{project.clientLegalName}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {project.clientInn && (
-                      <p className="text-xs text-gray-600">ИНН: {project.clientInn}</p>
-                    )}
-                    {project.clientKpp && (
-                      <p className="text-xs text-gray-600">КПП: {project.clientKpp}</p>
-                    )}
-                  </div>
-                </div>
-                {project.clientLegalAddress && (
-                  <p className="text-xs text-gray-600 mt-2">Адрес: {project.clientLegalAddress}</p>
-                )}
-                {project.clientContactPhone && (
-                  <p className="text-xs text-gray-600">Телефон: {project.clientContactPhone}</p>
-                )}
-                {project.clientContactEmail && (
-                  <p className="text-xs text-gray-600">Email: {project.clientContactEmail}</p>
-                )}
-              </div>
             </div>
           )}
         </div>
@@ -969,6 +1107,214 @@ export default function ProjectDetailPage() {
                     Закрыть
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Client Edit Modal */}
+        {showClientModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-lg max-w-4xl w-full my-8">
+              <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white z-10">
+                <h2 className="text-xl font-bold text-gray-900">Данные клиента</h2>
+                <button 
+                  onClick={() => setShowClientModal(false)} 
+                  className="p-2 hover:bg-gray-100 rounded"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Название клиента</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientName}
+                      onChange={(e) => setClientFormData({...clientFormData, clientName: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="ООО 'Название компании'"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Полное юридическое наименование</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientLegalName}
+                      onChange={(e) => setClientFormData({...clientFormData, clientLegalName: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Общество с ограниченной ответственностью..."
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">ИНН</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientInn}
+                      onChange={(e) => setClientFormData({...clientFormData, clientInn: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="1234567890"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">КПП</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientKpp}
+                      onChange={(e) => setClientFormData({...clientFormData, clientKpp: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="123456789"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">ОГРН</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientOgrn}
+                      onChange={(e) => setClientFormData({...clientFormData, clientOgrn: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="1234567890123"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Юридический адрес</label>
+                    <textarea
+                      value={clientFormData.clientLegalAddress}
+                      onChange={(e) => setClientFormData({...clientFormData, clientLegalAddress: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={2}
+                      placeholder="г. Москва, ул. Примерная, д. 1, офис 101"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Фактический адрес</label>
+                    <textarea
+                      value={clientFormData.clientActualAddress}
+                      onChange={(e) => setClientFormData({...clientFormData, clientActualAddress: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={2}
+                      placeholder="г. Москва, ул. Фактическая, д. 2, офис 201"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">ФИО директора</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientDirectorName}
+                      onChange={(e) => setClientFormData({...clientFormData, clientDirectorName: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Иванов Иван Иванович"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                    <input
+                      type="text"
+                      value={clientFormData.clientContactPhone}
+                      onChange={(e) => setClientFormData({...clientFormData, clientContactPhone: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="+7 (495) 123-45-67"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={clientFormData.clientContactEmail}
+                    onChange={(e) => setClientFormData({...clientFormData, clientContactEmail: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="info@company.ru"
+                  />
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4">Банковские реквизиты</h3>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Расчетный счет</label>
+                      <input
+                        type="text"
+                        value={clientFormData.clientBankAccount}
+                        onChange={(e) => setClientFormData({...clientFormData, clientBankAccount: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="40702810000000000001"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Наименование банка</label>
+                      <input
+                        type="text"
+                        value={clientFormData.clientBankName}
+                        onChange={(e) => setClientFormData({...clientFormData, clientBankName: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="ПАО СБЕРБАНК"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">БИК банка</label>
+                      <input
+                        type="text"
+                        value={clientFormData.clientBankBik}
+                        onChange={(e) => setClientFormData({...clientFormData, clientBankBik: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="044525225"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Корреспондентский счет</label>
+                      <input
+                        type="text"
+                        value={clientFormData.clientCorrespondentAccount}
+                        onChange={(e) => setClientFormData({...clientFormData, clientCorrespondentAccount: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="30101810000000000225"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-500 mt-4">
+                  💡 Эти данные будут автоматически использоваться в договорах и других документах проекта
+                </p>
+              </div>
+
+              <div className="flex gap-3 p-6 border-t sticky bottom-0 bg-white">
+                <button
+                  onClick={handleSaveClient}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                >
+                  Сохранить
+                </button>
+                <button
+                  onClick={() => setShowClientModal(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+                >
+                  Отмена
+                </button>
               </div>
             </div>
           </div>
