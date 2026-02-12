@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Settings, Save, User, Bell, Shield, Database, Globe, LogOut } from 'lucide-react'
+import { Settings, Save, User, Bell, Shield, Database, Globe, LogOut, Clock, AlertTriangle, Wallet, FileText, Loader2 } from 'lucide-react'
 import Layout from '@/components/layout'
 import { useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
@@ -51,6 +51,19 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const router = useRouter()
+  
+  // Настройки уведомлений о сроках
+  const [deadlineSettings, setDeadlineSettings] = useState({
+    deadlineReminderDays: 3,
+    deadlineReminderEnabled: true,
+    overdueNotifyEnabled: true,
+    overdueNotifyManager: true,
+    budgetWarningPercent: 80,
+    budgetWarningEnabled: true,
+    invoiceOverdueEnabled: true
+  })
+  const [loadingDeadlineSettings, setLoadingDeadlineSettings] = useState(true)
+  const [savingDeadlineSettings, setSavingDeadlineSettings] = useState(false)
 
   // Загружаем данные пользователя при загрузке компонента
   useEffect(() => {
@@ -82,6 +95,57 @@ export default function SettingsPage() {
       }))
     }
   }, [session])
+
+  // Загрузка настроек уведомлений о сроках
+  useEffect(() => {
+    const fetchDeadlineSettings = async () => {
+      try {
+        setLoadingDeadlineSettings(true)
+        const res = await fetch('/api/notifications/settings')
+        if (res.ok) {
+          const data = await res.json()
+          setDeadlineSettings({
+            deadlineReminderDays: data.deadlineReminderDays ?? 3,
+            deadlineReminderEnabled: data.deadlineReminderEnabled ?? true,
+            overdueNotifyEnabled: data.overdueNotifyEnabled ?? true,
+            overdueNotifyManager: data.overdueNotifyManager ?? true,
+            budgetWarningPercent: data.budgetWarningPercent ?? 80,
+            budgetWarningEnabled: data.budgetWarningEnabled ?? true,
+            invoiceOverdueEnabled: data.invoiceOverdueEnabled ?? true
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching deadline settings:', error)
+      } finally {
+        setLoadingDeadlineSettings(false)
+      }
+    }
+    fetchDeadlineSettings()
+  }, [])
+
+  // Сохранение настроек уведомлений о сроках
+  const handleSaveDeadlineSettings = async () => {
+    try {
+      setSavingDeadlineSettings(true)
+      const res = await fetch('/api/notifications/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(deadlineSettings)
+      })
+      if (res.ok) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      } else {
+        const error = await res.json()
+        alert(error.error || 'Ошибка сохранения')
+      }
+    } catch (error) {
+      console.error('Error saving deadline settings:', error)
+      alert('Ошибка сохранения настроек')
+    } finally {
+      setSavingDeadlineSettings(false)
+    }
+  }
 
   const handleSave = async () => {
     setLoading(true)
@@ -333,6 +397,195 @@ export default function SettingsPage() {
                     className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Уведомления о сроках */}
+            <Card className="animate-fade-in lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Clock className="h-5 w-5 mr-2 text-primary" />
+                  Автоматические уведомления о сроках
+                </CardTitle>
+                <CardDescription>Настройте автоматические напоминания о дедлайнах, бюджете и счетах</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingDeadlineSettings ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Дедлайны этапов */}
+                    <div className="border rounded-lg p-4 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <AlertTriangle className="h-4 w-4 text-orange-500" />
+                        Дедлайны этапов работ
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Напоминание о приближающемся дедлайне</Label>
+                          <p className="text-sm text-gray-500">Уведомлять ответственного о скором окончании срока</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={deadlineSettings.deadlineReminderEnabled}
+                          onChange={(e) => setDeadlineSettings({
+                            ...deadlineSettings,
+                            deadlineReminderEnabled: e.target.checked
+                          })}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                      </div>
+                      
+                      {deadlineSettings.deadlineReminderEnabled && (
+                        <div className="ml-4">
+                          <Label htmlFor="reminderDays">За сколько дней напоминать</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Input
+                              id="reminderDays"
+                              type="number"
+                              min="1"
+                              max="30"
+                              value={deadlineSettings.deadlineReminderDays}
+                              onChange={(e) => setDeadlineSettings({
+                                ...deadlineSettings,
+                                deadlineReminderDays: parseInt(e.target.value) || 3
+                              })}
+                              className="w-20"
+                            />
+                            <span className="text-sm text-gray-500">дней</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Уведомление о просроченных этапах</Label>
+                          <p className="text-sm text-gray-500">Уведомлять ответственного о просрочке</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={deadlineSettings.overdueNotifyEnabled}
+                          onChange={(e) => setDeadlineSettings({
+                            ...deadlineSettings,
+                            overdueNotifyEnabled: e.target.checked
+                          })}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                      </div>
+                      
+                      {deadlineSettings.overdueNotifyEnabled && (
+                        <div className="flex items-center justify-between ml-4">
+                          <div>
+                            <Label>Также уведомлять руководителя проекта</Label>
+                            <p className="text-sm text-gray-500">Алерт руководителю о просрочке</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={deadlineSettings.overdueNotifyManager}
+                            onChange={(e) => setDeadlineSettings({
+                              ...deadlineSettings,
+                              overdueNotifyManager: e.target.checked
+                            })}
+                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Бюджет */}
+                    <div className="border rounded-lg p-4 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <Wallet className="h-4 w-4 text-green-500" />
+                        Бюджет проектов
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Предупреждение о расходе бюджета</Label>
+                          <p className="text-sm text-gray-500">Уведомлять когда бюджет израсходован на определённый процент</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={deadlineSettings.budgetWarningEnabled}
+                          onChange={(e) => setDeadlineSettings({
+                            ...deadlineSettings,
+                            budgetWarningEnabled: e.target.checked
+                          })}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                      </div>
+                      
+                      {deadlineSettings.budgetWarningEnabled && (
+                        <div className="ml-4">
+                          <Label htmlFor="budgetPercent">Процент расхода для предупреждения</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Input
+                              id="budgetPercent"
+                              type="number"
+                              min="50"
+                              max="100"
+                              value={deadlineSettings.budgetWarningPercent}
+                              onChange={(e) => setDeadlineSettings({
+                                ...deadlineSettings,
+                                budgetWarningPercent: parseInt(e.target.value) || 80
+                              })}
+                              className="w-20"
+                            />
+                            <span className="text-sm text-gray-500">%</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Счета */}
+                    <div className="border rounded-lg p-4 space-y-4">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <FileText className="h-4 w-4 text-blue-500" />
+                        Счета и платежи
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Уведомление о просроченных счетах</Label>
+                          <p className="text-sm text-gray-500">Напоминание об неоплаченных счетах</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={deadlineSettings.invoiceOverdueEnabled}
+                          onChange={(e) => setDeadlineSettings({
+                            ...deadlineSettings,
+                            invoiceOverdueEnabled: e.target.checked
+                          })}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Кнопка сохранения */}
+                    <div className="flex justify-end pt-4 border-t">
+                      <Button
+                        onClick={handleSaveDeadlineSettings}
+                        disabled={savingDeadlineSettings}
+                        className="gradient-primary hover:opacity-90"
+                      >
+                        {savingDeadlineSettings ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Сохранение...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Сохранить настройки уведомлений
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

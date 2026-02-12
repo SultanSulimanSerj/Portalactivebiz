@@ -15,8 +15,10 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const rawPage = parseInt(searchParams.get('page') || '1')
+    const rawLimit = parseInt(searchParams.get('limit') || '10')
+    const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
+    const limit = isNaN(rawLimit) || rawLimit < 1 ? 10 : Math.min(rawLimit, 100)
     const status = searchParams.get('status')
     const search = searchParams.get('search')
 
@@ -136,7 +138,13 @@ export async function POST(request: NextRequest) {
     const { allowed, user, error } = await checkPermission(request, 'canCreateProjects')
     
     if (!allowed || !user) {
-      return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
+      console.error('Permission denied for project creation:', { allowed, userId: user?.id, error })
+      return NextResponse.json({ error: error || 'Недостаточно прав для создания проекта' }, { status: 403 })
+    }
+
+    if (!user.companyId) {
+      console.error('User has no companyId:', { userId: user.id, email: user.email })
+      return NextResponse.json({ error: 'Пользователь не привязан к компании' }, { status: 400 })
     }
 
     const body = await request.json()
@@ -165,9 +173,20 @@ export async function POST(request: NextRequest) {
       clientCorrespondentAccount
     } = body
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    if (!name || name.trim() === '') {
+      return NextResponse.json({ error: 'Название проекта обязательно' }, { status: 400 })
     }
+
+    // Валидация бюджета если он передан
+    let parsedBudget: number | null = null
+    if (budget !== undefined && budget !== null && budget !== '') {
+      parsedBudget = parseFloat(budget)
+      if (isNaN(parsedBudget) || parsedBudget < 0) {
+        return NextResponse.json({ error: 'Некорректная сумма бюджета' }, { status: 400 })
+      }
+    }
+
+    console.log('Creating project:', { name, companyId: user.companyId, creatorId: user.id })
 
     // Создаем проект и финансовую запись в транзакции
     const result = await prisma.$transaction(async (tx) => {
@@ -179,7 +198,7 @@ export async function POST(request: NextRequest) {
             description: description || null,
             status: status || 'PLANNING',
             priority: priority || 'MEDIUM',
-            budget: budget ? parseFloat(budget) : null,
+            budget: parsedBudget,
             startDate: startDate ? new Date(startDate) : null,
             endDate: endDate ? new Date(endDate) : null,
             companyId: user.companyId!,
@@ -212,7 +231,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Если указан бюджет, создаем финансовую запись в зависимости от статуса проекта
-      if (budget && parseFloat(budget) > 0) {
+      if (parsedBudget && parsedBudget > 0) {
         const projectStatus = status || 'PLANNING'
         
         // Определяем тип финансовой записи в зависимости от статуса
@@ -230,7 +249,7 @@ export async function POST(request: NextRequest) {
             type: financeType as any,
             category: financeCategory,
             description: `Бюджет проекта "${name}"`,
-            amount: parseFloat(budget),
+            amount: parsedBudget,
             date: new Date(),
             projectId: project.id,
             creatorId: user.id,
@@ -242,9 +261,27 @@ export async function POST(request: NextRequest) {
       return project
     })
 
+    console.log('Project created successfully:', result.id)
     return NextResponse.json({ project: result }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating project:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Error details:', {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack
+    })
+    
+    // Более информативное сообщение об ошибке
+    let errorMessage = 'Внутренняя ошибка сервера при создании проекта'
+    if (error?.code === 'P2002') {
+      errorMessage = 'Проект с таким названием уже существует'
+    } else if (error?.code === 'P2003') {
+      errorMessage = 'Ошибка связи с базой данных'
+    } else if (error?.message) {
+      errorMessage = error.message
+    }
+    
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

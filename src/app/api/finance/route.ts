@@ -31,12 +31,12 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
 
-    // Проверяем кэш
-    const cacheKey = getCacheKey(request)
-    const cached = getFromCache(cacheKey)
-    if (cached) {
-      return NextResponse.json(cached)
-    }
+    // Кэширование отключено для актуальности данных
+    // const cacheKey = getCacheKey(request)
+    // const cached = getFromCache(cacheKey)
+    // if (cached) {
+    //   return NextResponse.json(cached)
+    // }
 
     // Фильтрация финансов в зависимости от роли пользователя
     let where: any = {
@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Сохраняем в кэш на 5 минут
-    setCache(cacheKey, result, 300)
+    // Кэширование отключено
+    // setCache(cacheKey, result, 300)
 
     const duration = Date.now() - startTime
     performanceMonitor.recordOperation('GET /api/finance', duration, true, user.id, requestId)
@@ -146,9 +146,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { type, category, description, amount, date, projectId } = body
+    const { type, category, description, amount, date, projectId, estimateItemId } = body
     
-    console.log('Creating finance record:', { type, category, description, amount, date, projectId })
+    // Валидация суммы
+    const parsedAmount = parseFloat(amount)
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      return NextResponse.json({ error: 'Некорректная сумма' }, { status: 400 })
+    }
+    
+    console.log('Creating finance record:', { type, category, description, amount: parsedAmount, date, projectId })
 
     const finance = await prisma.finance.create({
       data: {
@@ -156,10 +162,11 @@ export async function POST(request: NextRequest) {
         type,
         category: category || 'Other',
         description: description || null,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         date: date ? new Date(date) : new Date(),
         projectId: projectId || '1', // Используем projectId напрямую
         creatorId: user.id, // Используем creatorId напрямую
+        estimateItemId: estimateItemId || null,
         updatedAt: new Date()
       },
       include: {
@@ -185,7 +192,7 @@ export async function POST(request: NextRequest) {
             projectId,
             participantIds,
             type as 'income' | 'expense' | 'budget',
-            parseFloat(amount),
+            parsedAmount,
             finance.project.name,
             description
           )

@@ -16,7 +16,7 @@ interface Project {
   endDate: string | null
   User: { name: string | null }
   ProjectUser: Array<{ User: { id: string; name: string | null } }>
-  _count: { Task: number; Document: number; ProjectUser: number }
+  _count: { tasks: number; documents: number; users: number }
   // Реквизиты клиента
   clientName?: string | null
   clientLegalName?: string | null
@@ -49,6 +49,8 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [showClientRequisites, setShowClientRequisites] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -96,6 +98,7 @@ export default function ProjectsPage() {
   const handleCreate = () => {
     setEditingProject(null)
     setShowClientRequisites(false)
+    setError(null)
     setFormData({
       name: '',
       description: '',
@@ -154,6 +157,9 @@ export default function ProjectsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    
     try {
       const url = editingProject 
         ? `/api/projects/${editingProject.id}`
@@ -169,12 +175,22 @@ export default function ProjectsPage() {
         body: JSON.stringify(formData)
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         setShowModal(false)
+        setError(null)
+        setShowClientRequisites(false)
         fetchProjects()
+      } else {
+        setError(data.error || 'Ошибка при создании проекта')
+        console.error('Ошибка при создании проекта:', data)
       }
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error('Ошибка при отправке запроса:', err)
+      setError(err.message || 'Произошла ошибка при отправке запроса')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -352,12 +368,12 @@ export default function ProjectsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <div className="text-sm text-gray-900">{project._count.Task}</div>
+                        <div className="text-sm text-gray-900">{project._count.tasks}</div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <Users className="h-3 w-3 text-gray-400" />
-                          <span className="text-sm text-gray-900">{project._count.ProjectUser}</span>
+                          <span className="text-sm text-gray-900">{project._count.users}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -394,12 +410,23 @@ export default function ProjectsPage() {
                 <h2 className="text-xl font-bold text-gray-900">
                   {editingProject ? 'Редактировать проект' : 'Создать проект'}
                 </h2>
-                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded">
+                <button 
+                  onClick={() => {
+                    setShowModal(false)
+                    setError(null)
+                  }} 
+                  className="p-2 hover:bg-gray-100 rounded"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {error}
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Название *</label>
                   <input
@@ -688,13 +715,17 @@ export default function ProjectsPage() {
                 <div className="flex gap-3 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingProject ? 'Сохранить' : 'Создать'}
+                    {isSubmitting ? 'Сохранение...' : (editingProject ? 'Сохранить' : 'Создать')}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                      setShowModal(false)
+                      setError(null)
+                    }}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
                   >
                     Отмена

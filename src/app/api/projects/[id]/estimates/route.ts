@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission, canUserAccessProject } from '@/lib/auth-middleware'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient() as any
+import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: NextRequest,

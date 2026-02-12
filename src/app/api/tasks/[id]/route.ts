@@ -121,6 +121,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Сначала удаляем все назначения задачи
+    await prisma.taskAssignment.deleteMany({
+      where: { taskId: params.id }
+    })
+
+    // Затем удаляем саму задачу
     await prisma.task.delete({
       where: { id: params.id }
     })

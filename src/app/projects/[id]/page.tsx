@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/layout'
-import { ArrowLeft, Edit, Users, FileText, Flag, DollarSign, Calendar, X, MessageSquare, Send, TrendingUp, TrendingDown, Percent, Plus, UserMinus } from 'lucide-react'
+import { ArrowLeft, Edit, Users, FileText, Flag, DollarSign, Calendar, X, MessageSquare, Send, TrendingUp, TrendingDown, Percent, Plus, UserMinus, MapPin, FileSignature, Clock, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { PermissionButton } from '@/components/permission-guard'
 import { useSocket } from '@/contexts/SocketContext'
@@ -36,6 +36,10 @@ interface ProjectDetail {
   clientBankName?: string
   clientBankBik?: string
   clientCorrespondentAccount?: string
+  // Дополнительные поля проекта
+  objectAddress?: string
+  contractNumber?: string
+  contractDate?: string
 }
 
 interface Message {
@@ -83,7 +87,10 @@ export default function ProjectDetailPage() {
     priority: 'MEDIUM',
     budget: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    objectAddress: '',
+    contractNumber: '',
+    contractDate: ''
   })
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [availableUsers, setAvailableUsers] = useState<User[]>([])
@@ -92,6 +99,13 @@ export default function ProjectDetailPage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [selectedMember, setSelectedMember] = useState<User | null>(null)
   const [estimatesTotal, setEstimatesTotal] = useState<number>(0)
+  const [workStagesStats, setWorkStagesStats] = useState<{
+    total: number
+    completed: number
+    inProgress: number
+    delayed: number
+    progress: number
+  } | null>(null)
   const [showClientModal, setShowClientModal] = useState(false)
   const [isClientSectionExpanded, setIsClientSectionExpanded] = useState(false)
   const [clientFormData, setClientFormData] = useState({
@@ -150,6 +164,7 @@ export default function ProjectDetailPage() {
       fetchMessages()
       fetchFinanceStats()
       fetchEstimatesTotal()
+      fetchWorkStagesStats()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.id])
@@ -233,6 +248,26 @@ export default function ProjectDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching estimates total:', error)
+    }
+  }
+
+  const fetchWorkStagesStats = async () => {
+    try {
+      const response = await fetch(`/api/projects/${params?.id}/stages`)
+      if (response.ok) {
+        const stages = await response.json()
+        const total = stages.length
+        const completed = stages.filter((s: any) => s.status === 'COMPLETED').length
+        const inProgress = stages.filter((s: any) => s.status === 'IN_PROGRESS').length
+        const delayed = stages.filter((s: any) => s.status === 'DELAYED').length
+        const progress = total > 0 
+          ? Math.round(stages.reduce((sum: number, s: any) => sum + s.progress, 0) / total)
+          : 0
+        
+        setWorkStagesStats({ total, completed, inProgress, delayed, progress })
+      }
+    } catch (error) {
+      console.error('Error fetching work stages:', error)
     }
   }
 
@@ -360,7 +395,10 @@ export default function ProjectDetailPage() {
       priority: project.priority,
       budget: project.budget?.toString() || '',
       startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
-      endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : ''
+      endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
+      objectAddress: project.objectAddress || '',
+      contractNumber: project.contractNumber || '',
+      contractDate: project.contractDate ? new Date(project.contractDate).toISOString().split('T')[0] : ''
     })
     setShowModal(true)
   }
@@ -377,7 +415,8 @@ export default function ProjectDetailPage() {
           ...formData,
           budget: formData.budget ? parseFloat(formData.budget) : null,
           startDate: formData.startDate || null,
-          endDate: formData.endDate || null
+          endDate: formData.endDate || null,
+          contractDate: formData.contractDate || null
         })
       })
 
@@ -689,7 +728,7 @@ export default function ProjectDetailPage() {
               </div>
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {project.budget ? `${(project.budget / 1000000).toFixed(1)}M ₽` : '—'}
+              {project.budget ? `${Number(project.budget).toLocaleString('ru-RU')} ₽` : '—'}
             </p>
             <p className="text-xs text-gray-600">Бюджет →</p>
           </Link>
@@ -708,7 +747,6 @@ export default function ProjectDetailPage() {
             </p>
             <p className="text-xs text-gray-600">Смета →</p>
           </Link>
-
 
           <Link 
             href={`/documents/generate?projectId=${project.id}`}
@@ -771,6 +809,81 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Work Schedule Block */}
+        <Link 
+          href={`/projects/${project.id}/schedule`}
+          className="block bg-white rounded-lg border p-6 hover:shadow-md transition-shadow group"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-50 rounded-lg">
+                <Calendar className="h-6 w-6 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">График работ</h2>
+                <p className="text-gray-500 text-sm">Планирование и отслеживание этапов</p>
+              </div>
+            </div>
+            
+            {workStagesStats && workStagesStats.total > 0 ? (
+              <div className="flex items-center gap-6">
+                {/* Прогресс-бар */}
+                <div className="hidden md:block">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-gray-500 text-sm">Прогресс</span>
+                    <span className="text-gray-900 font-semibold">{workStagesStats.progress}%</span>
+                  </div>
+                  <div className="w-40 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                      style={{ width: `${workStagesStats.progress}%` }}
+                    />
+                  </div>
+                </div>
+                
+                {/* Статистика этапов */}
+                <div className="flex gap-4 text-center">
+                  <div className="px-3 py-1 bg-gray-50 rounded-lg">
+                    <p className="text-xl font-bold text-gray-900">{workStagesStats.total}</p>
+                    <p className="text-xs text-gray-500">всего</p>
+                  </div>
+                  <div className="px-3 py-1 bg-green-50 rounded-lg">
+                    <p className="text-xl font-bold text-green-600">{workStagesStats.completed}</p>
+                    <p className="text-xs text-gray-500">готово</p>
+                  </div>
+                  {workStagesStats.inProgress > 0 && (
+                    <div className="px-3 py-1 bg-blue-50 rounded-lg">
+                      <p className="text-xl font-bold text-blue-600">{workStagesStats.inProgress}</p>
+                      <p className="text-xs text-gray-500">в работе</p>
+                    </div>
+                  )}
+                  {workStagesStats.delayed > 0 && (
+                    <div className="px-3 py-1 bg-red-50 rounded-lg">
+                      <p className="text-xl font-bold text-red-600">{workStagesStats.delayed}</p>
+                      <p className="text-xs text-gray-500">задержка</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="p-2 text-gray-400 group-hover:text-indigo-600 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="text-gray-500 text-sm">Создать план работ</span>
+                <div className="p-2 text-gray-400 group-hover:text-indigo-600 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            )}
+          </div>
+        </Link>
 
         {/* Client Details */}
         <div className="bg-white rounded-lg border">
@@ -893,12 +1006,57 @@ export default function ProjectDetailPage() {
         {/* Details */}
         <div className="bg-white rounded-lg border p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Детали проекта</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+          
+          {/* Прогресс по времени */}
+          {project.startDate && project.endDate && (() => {
+            const start = new Date(project.startDate).getTime()
+            const end = new Date(project.endDate).getTime()
+            const now = Date.now()
+            const totalDuration = end - start
+            const elapsed = now - start
+            const timeProgress = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100))
+            const daysRemaining = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+            const totalDays = Math.ceil(totalDuration / (1000 * 60 * 60 * 24))
+            const isOverdue = now > end
+            
+            return (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700">Прогресс по времени</span>
+                  </div>
+                  <span className={`text-sm font-semibold ${isOverdue ? 'text-red-600' : 'text-gray-900'}`}>
+                    {isOverdue 
+                      ? `Просрочен на ${Math.abs(daysRemaining)} дн.` 
+                      : daysRemaining === 0 
+                        ? 'Сегодня дедлайн'
+                        : `Осталось ${daysRemaining} дн.`
+                    }
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all ${isOverdue ? 'bg-red-500' : 'bg-blue-500'}`}
+                    style={{ width: `${timeProgress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between mt-2 text-xs text-gray-500">
+                  <span>{new Date(project.startDate).toLocaleDateString('ru-RU')}</span>
+                  <span>Длительность: {totalDays} дн.</span>
+                  <span>{new Date(project.endDate).toLocaleDateString('ru-RU')}</span>
+                </div>
+              </div>
+            )
+          })()}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {/* Даты */}
             {project.startDate && (
               <div>
                 <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
                   <Calendar className="h-4 w-4" />
-                  <span>Дата начала</span>
+                  <span>Начало</span>
                 </div>
                 <p className="text-sm font-medium text-gray-900">
                   {new Date(project.startDate).toLocaleDateString('ru-RU')}
@@ -909,35 +1067,73 @@ export default function ProjectDetailPage() {
               <div>
                 <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
                   <Calendar className="h-4 w-4" />
-                  <span>Дата окончания</span>
+                  <span>Окончание</span>
                 </div>
                 <p className="text-sm font-medium text-gray-900">
                   {new Date(project.endDate).toLocaleDateString('ru-RU')}
                 </p>
               </div>
             )}
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Приоритет</p>
-              <p className={`text-sm font-medium ${
-                project.priority === 'HIGH' ? 'text-red-600' : 
-                project.priority === 'MEDIUM' ? 'text-blue-600' : 'text-green-600'
-              }`}>
-                {getPriorityText(project.priority)}
-              </p>
-            </div>
-            {project.budget && (
+
+            {/* Договор */}
+            {project.contractNumber && (
               <div>
-                <p className="text-sm text-gray-500 mb-1">Бюджет</p>
-                <p className="text-sm font-medium text-gray-900">
-                  {project.budget.toLocaleString()} ₽
-                </p>
+                <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                  <FileSignature className="h-4 w-4" />
+                  <span>Договор №</span>
+                </div>
+                <p className="text-sm font-medium text-gray-900">{project.contractNumber}</p>
+                {project.contractDate && (
+                  <p className="text-xs text-gray-500">
+                    от {new Date(project.contractDate).toLocaleDateString('ru-RU')}
+                  </p>
+                )}
               </div>
             )}
+
+            {/* Приоритет */}
+            <div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <Flag className="h-4 w-4" />
+                <span>Приоритет</span>
+              </div>
+              <span className={`inline-flex px-2 py-0.5 rounded text-sm font-medium ${
+                project.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
+                project.priority === 'HIGH' ? 'bg-orange-100 text-orange-700' : 
+                project.priority === 'MEDIUM' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+              }`}>
+                {getPriorityText(project.priority)}
+              </span>
+            </div>
+
+            {/* Задачи */}
+            <div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Задачи</span>
+              </div>
+              <p className="text-sm font-medium text-gray-900">{project._count.tasks} шт.</p>
+            </div>
           </div>
+
+          {/* Адрес объекта */}
+          {project.objectAddress && (
+            <div className="mt-4 pt-4 border-t">
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-gray-500 mt-0.5" />
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Адрес объекта</p>
+                  <p className="text-sm font-medium text-gray-900">{project.objectAddress}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Описание */}
           {project.description && (
-            <div className="mt-6">
+            <div className="mt-4 pt-4 border-t">
               <p className="text-sm text-gray-500 mb-2">Описание</p>
-              <p className="text-sm text-gray-900">{project.description}</p>
+              <p className="text-sm text-gray-900 whitespace-pre-wrap">{project.description}</p>
             </div>
           )}
         </div>
@@ -1206,6 +1402,46 @@ export default function ProjectDetailPage() {
                     onChange={(e) => setFormData({...formData, endDate: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+
+                {/* Дополнительные поля */}
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Дополнительная информация</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Адрес объекта</label>
+                      <input
+                        type="text"
+                        value={formData.objectAddress}
+                        onChange={(e) => setFormData({...formData, objectAddress: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="г. Москва, ул. Примерная, д. 1"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Номер договора</label>
+                        <input
+                          type="text"
+                          value={formData.contractNumber}
+                          onChange={(e) => setFormData({...formData, contractNumber: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="ДОГ-2026/001"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Дата договора</label>
+                        <input
+                          type="date"
+                          value={formData.contractDate}
+                          onChange={(e) => setFormData({...formData, contractDate: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-4">

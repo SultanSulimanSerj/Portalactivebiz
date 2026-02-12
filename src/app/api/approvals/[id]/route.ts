@@ -206,9 +206,29 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await prisma.approval.delete({
-      where: { id: params.id }
-    })
+    // Удаляем все связанные записи в транзакции
+    await prisma.$transaction([
+      // Удаляем назначения
+      prisma.approvalAssignment.deleteMany({
+        where: { approvalId: params.id }
+      }),
+      // Удаляем комментарии
+      prisma.approvalComment.deleteMany({
+        where: { approvalId: params.id }
+      }),
+      // Удаляем вложения
+      prisma.approvalAttachment.deleteMany({
+        where: { approvalId: params.id }
+      }),
+      // Удаляем историю
+      prisma.approvalHistory.deleteMany({
+        where: { approvalId: params.id }
+      }),
+      // Удаляем само согласование
+      prisma.approval.delete({
+        where: { id: params.id }
+      })
+    ])
 
     return NextResponse.json({ success: true })
   } catch (error) {

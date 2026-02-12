@@ -12,8 +12,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '50')
+    const rawPage = parseInt(searchParams.get('page') || '1')
+    const rawLimit = parseInt(searchParams.get('limit') || '50')
+    const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
+    const limit = isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(rawLimit, 100)
 
     const where = projectId 
       ? {

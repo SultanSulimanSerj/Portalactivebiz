@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/auth-middleware'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
-const prisma = new PrismaClient() as any
+interface EstimateItemInput {
+  id: string
+  name: string
+  description?: string | null
+  notes?: string | null
+  quantity: number | string
+  unit: string
+  unitPrice: number | string
+  costPrice?: number | string
+  category: string
+}
 
 export async function GET(
   request: NextRequest,
@@ -76,7 +87,7 @@ export async function PUT(
     }
 
     // Обновляем смету и позиции в транзакции
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Удаляем старые позиции
       await tx.estimateItem.deleteMany({
         where: { estimateId: params.estimateId }
@@ -86,7 +97,7 @@ export async function PUT(
       let total = 0
       let totalCost = 0
       if (items && items.length > 0) {
-        const estimateItems = items.map((item: any) => {
+        const estimateItems = (items as EstimateItemInput[]).map((item) => {
           const itemTotal = Number(item.quantity) * Number(item.unitPrice)
           const itemCost = Number(item.quantity) * Number(item.costPrice || 0)
           total += itemTotal
@@ -98,6 +109,7 @@ export async function PUT(
               : item.id,
             name: item.name,
             description: item.description || null,
+            notes: item.notes || null,
             quantity: Number(item.quantity),
             unit: item.unit,
             unitPrice: Number(item.unitPrice),
@@ -108,7 +120,7 @@ export async function PUT(
         })
 
         await tx.estimateItem.createMany({
-          data: estimateItems.map((item: any) => ({
+          data: estimateItems.map((item) => ({
             ...item,
             estimateId: params.estimateId
           }))

@@ -2,6 +2,7 @@ const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 const { Server } = require('socket.io')
+const cron = require('node-cron')
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = 'localhost'
@@ -9,6 +10,19 @@ const port = parseInt(process.env.PORT || '3000', 10)
 
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
+
+// Функция для проверки дедлайнов
+async function checkDeadlines() {
+  try {
+    const response = await fetch(`http://${hostname}:${port}/api/notifications/check-deadlines`, {
+      method: 'POST'
+    })
+    const result = await response.json()
+    console.log('📅 Проверка дедлайнов:', result)
+  } catch (error) {
+    console.error('❌ Ошибка проверки дедлайнов:', error.message)
+  }
+}
 
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
@@ -80,6 +94,21 @@ app.prepare().then(() => {
   ✅ Next.js сервер запущен на http://${hostname}:${port}
   🔌 Socket.IO доступен на ws://${hostname}:${port}/api/socket
       `)
+
+      // Запускаем cron-задачу для проверки дедлайнов
+      // Каждый день в 9:00 утра
+      cron.schedule('0 9 * * *', () => {
+        console.log('⏰ Запуск ежедневной проверки дедлайнов...')
+        checkDeadlines()
+      })
+
+      // Также проверяем через 30 секунд после запуска сервера
+      setTimeout(() => {
+        console.log('🚀 Первоначальная проверка дедлайнов...')
+        checkDeadlines()
+      }, 30000)
+
+      console.log('  📅 Cron-задача настроена: проверка дедлайнов каждый день в 9:00')
     })
 })
 

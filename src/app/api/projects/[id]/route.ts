@@ -61,6 +61,10 @@ export async function GET(
         clientBankName: true,
         clientBankBik: true,
         clientCorrespondentAccount: true,
+        // Дополнительные поля проекта
+        objectAddress: true,
+        contractNumber: true,
+        contractDate: true,
         creator: {
           select: { id: true, name: true, email: true }
         },
@@ -122,8 +126,21 @@ export async function PUT(
       clientBankAccount,
       clientBankName,
       clientBankBik,
-      clientCorrespondentAccount
+      clientCorrespondentAccount,
+      // Дополнительные поля проекта
+      objectAddress,
+      contractNumber,
+      contractDate
     } = body
+
+    // Валидация бюджета если он передан
+    let parsedBudget: number | undefined
+    if (budget !== undefined && budget !== null && budget !== '') {
+      parsedBudget = parseFloat(budget)
+      if (isNaN(parsedBudget) || parsedBudget < 0) {
+        return NextResponse.json({ error: 'Некорректная сумма бюджета' }, { status: 400 })
+      }
+    }
 
     // Обновляем проект и финансовую запись в транзакции
     const result = await prisma.$transaction(async (tx) => {
@@ -138,7 +155,7 @@ export async function PUT(
           ...(description && { description }),
           ...(startDate && { startDate: new Date(startDate) }),
           ...(endDate && { endDate: new Date(endDate) }),
-          ...(budget && { budget: parseFloat(budget) }),
+          ...(parsedBudget !== undefined && { budget: parsedBudget }),
           ...(priority && { priority }),
           ...(status && { status }),
           // Данные клиента
@@ -155,7 +172,11 @@ export async function PUT(
           ...(clientBankAccount !== undefined && { clientBankAccount }),
           ...(clientBankName !== undefined && { clientBankName }),
           ...(clientBankBik !== undefined && { clientBankBik }),
-          ...(clientCorrespondentAccount !== undefined && { clientCorrespondentAccount })
+          ...(clientCorrespondentAccount !== undefined && { clientCorrespondentAccount }),
+          // Дополнительные поля проекта
+          ...(objectAddress !== undefined && { objectAddress }),
+          ...(contractNumber !== undefined && { contractNumber }),
+          ...(contractDate !== undefined && { contractDate: contractDate ? new Date(contractDate) : null })
         },
         include: {
           creator: {
@@ -195,8 +216,7 @@ export async function PUT(
       }
 
       // Если изменился бюджет, обновляем финансовую запись
-      if (budget !== undefined) {
-        const budgetAmount = parseFloat(budget)
+      if (parsedBudget !== undefined) {
         const projectStatus = status || project.status
         
         // Определяем тип финансовой записи в зависимости от статуса
@@ -222,14 +242,14 @@ export async function PUT(
         })
 
         // Создаем новую финансовую запись, если бюджет больше 0
-        if (budgetAmount > 0) {
+        if (parsedBudget > 0) {
           await tx.finance.create({
             data: {
               id: generateId(),
               type: financeType as any,
               category: financeCategory,
               description: `Бюджет проекта "${project.name}"`,
-              amount: budgetAmount,
+              amount: parsedBudget,
               date: new Date(),
               projectId: project.id,
               creatorId: user.id,
@@ -272,7 +292,48 @@ export async function DELETE(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
-    // Delete project (cascade will handle related records)
+    // Удаляем все связанные данные перед удалением проекта
+    
+    // 1. Удаляем назначения задач
+    await prisma.taskAssignment.deleteMany({
+      where: {
+        task: {
+          projectId: params.id
+        }
+      }
+    })
+
+    // 2. Удаляем задачи проекта
+    await prisma.task.deleteMany({
+      where: { projectId: params.id }
+    })
+
+    // 3. Удаляем сообщения проекта
+    await prisma.chatMessage.deleteMany({
+      where: { projectId: params.id }
+    })
+
+    // 4. Удаляем смету проекта
+    await prisma.estimate.deleteMany({
+      where: { projectId: params.id }
+    })
+
+    // 5. Удаляем финансы проекта
+    await prisma.finance.deleteMany({
+      where: { projectId: params.id }
+    })
+
+    // 6. Удаляем документы проекта
+    await prisma.document.deleteMany({
+      where: { projectId: params.id }
+    })
+
+    // 7. Удаляем участников проекта
+    await prisma.projectUser.deleteMany({
+      where: { projectId: params.id }
+    })
+
+    // 8. Теперь можем удалить сам проект
     await prisma.project.delete({
       where: {
         id: params.id

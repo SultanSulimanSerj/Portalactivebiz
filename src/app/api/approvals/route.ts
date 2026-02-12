@@ -14,8 +14,10 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const rawPage = parseInt(searchParams.get('page') || '1')
+    const rawLimit = parseInt(searchParams.get('limit') || '10')
+    const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
+    const limit = isNaN(rawLimit) || rawLimit < 1 ? 10 : Math.min(rawLimit, 100)
     const status = searchParams.get('status')
     const type = searchParams.get('type')
 
@@ -175,10 +177,7 @@ export async function POST(request: NextRequest) {
           create: assigneeIds?.map((userId: string, index: number) => ({
             id: generateId(),
             userId,
-            status: 'PENDING',
-            role: roles?.[userId] || 'APPROVER',
-            order: index,
-            updatedAt: new Date()
+            status: 'PENDING'
           })) || []
         }
       },

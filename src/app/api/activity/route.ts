@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const rawLimit = parseInt(searchParams.get('limit') || '10')
+    const limit = isNaN(rawLimit) || rawLimit < 1 ? 10 : Math.min(rawLimit, 50)
 
     // Получаем последние проекты, задачи и документы
     const [recentProjects, recentTasks, recentDocuments] = await Promise.all([

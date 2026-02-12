@@ -12,6 +12,7 @@ interface EstimateItem {
   id: string
   name: string
   description: string
+  notes?: string | null
   quantity: number
   unit: string
   unitPrice: number
@@ -119,6 +120,7 @@ export default function EstimatePage() {
     fetchProject()
     fetchEstimates()
   }, [projectId])
+
 
   const fetchProject = async () => {
     try {
@@ -431,111 +433,6 @@ export default function EstimatePage() {
     }
   }
 
-  const exportToPDF = () => {
-    if (!activeEstimate) {
-      console.log('No active estimate for PDF')
-      return
-    }
-
-    console.log('Starting PDF export...')
-
-    // Импортируем библиотеки динамически
-    Promise.all([
-      import('jspdf'),
-      import('html2canvas')
-    ]).then(([jsPDF, html2canvas]) => {
-      console.log('PDF libraries loaded successfully')
-      
-      // Создаем HTML таблицу для PDF
-      const tableHtml = `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2 style="text-align: center; margin-bottom: 30px;">${activeEstimate.name}</h2>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-            <thead>
-              <tr style="background-color: #4472C4; color: white;">
-                <th style="border: 1px solid #000; padding: 8px; text-align: center;">№</th>
-                <th style="border: 1px solid #000; padding: 8px; text-align: left;">Наименование</th>
-                <th style="border: 1px solid #000; padding: 8px; text-align: center;">Количество</th>
-                <th style="border: 1px solid #000; padding: 8px; text-align: center;">Единица</th>
-                <th style="border: 1px solid #000; padding: 8px; text-align: right;">Цена</th>
-                <th style="border: 1px solid #000; padding: 8px; text-align: right;">Себестоимость</th>
-                <th style="border: 1px solid #000; padding: 8px; text-align: right;">Сумма</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${activeEstimate.items.map((item, index) => `
-                <tr>
-                  <td style="border: 1px solid #000; padding: 8px; text-align: center;">${index + 1}</td>
-                  <td style="border: 1px solid #000; padding: 8px;">${item.name}</td>
-                  <td style="border: 1px solid #000; padding: 8px; text-align: center;">${item.quantity}</td>
-                  <td style="border: 1px solid #000; padding: 8px; text-align: center;">${item.unit}</td>
-                  <td style="border: 1px solid #000; padding: 8px; text-align: right;">${formatCurrency(item.unitPrice)}</td>
-                  <td style="border: 1px solid #000; padding: 8px; text-align: right;">${formatCurrency(item.costPrice)}</td>
-                  <td style="border: 1px solid #000; padding: 8px; text-align: right;">${formatCurrency(item.quantity * item.unitPrice)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div style="margin-top: 20px; text-align: right;">
-            <p><strong>Себестоимость: ${formatCurrency(activeEstimate.totalCost)}</strong></p>
-            <p><strong>Прибыль: ${formatCurrency(activeEstimate.profit)}</strong></p>
-            <p><strong>Сумма без НДС: ${formatCurrency(activeEstimate.total)}</strong></p>
-            ${activeEstimate.vatEnabled ? `
-              <p><strong>НДС (${activeEstimate.vatRate}%): ${formatCurrency(activeEstimate.vatAmount)}</strong></p>
-              <p style="font-size: 18px; color: #2E7D32;"><strong>ИТОГО: ${formatCurrency(activeEstimate.totalWithVat)}</strong></p>
-            ` : `
-              <p style="font-size: 18px; color: #2E7D32;"><strong>ИТОГО: ${formatCurrency(activeEstimate.total)}</strong></p>
-            `}
-          </div>
-        </div>
-      `
-
-      // Создаем временный элемент
-      const tempDiv = document.createElement('div')
-      tempDiv.innerHTML = tableHtml
-      tempDiv.style.position = 'absolute'
-      tempDiv.style.left = '-9999px'
-      tempDiv.style.top = '-9999px'
-      document.body.appendChild(tempDiv)
-
-      // Конвертируем в canvas и создаем PDF
-      html2canvas.default(tempDiv).then(canvas => {
-        const imgData = canvas.toDataURL('image/png')
-        const pdf = new jsPDF.default('p', 'mm', 'a4')
-        
-        const imgWidth = 210
-        const pageHeight = 295
-        const imgHeight = (canvas.height * imgWidth) / canvas.width
-        let heightLeft = imgHeight
-
-        let position = 0
-
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageHeight
-
-        while (heightLeft >= 0) {
-          position = heightLeft - imgHeight
-          pdf.addPage()
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-          heightLeft -= pageHeight
-        }
-
-        // Удаляем временный элемент
-        document.body.removeChild(tempDiv)
-
-        // Скачиваем PDF
-        const fileName = `Смета_${activeEstimate.name}_${new Date().toLocaleDateString('ru-RU').replace(/\./g, '-')}.pdf`
-        pdf.save(fileName)
-        console.log('PDF created successfully:', fileName)
-      }).catch(error => {
-        console.error('Error creating PDF:', error)
-        document.body.removeChild(tempDiv)
-      })
-    }).catch(error => {
-      console.error('Error loading PDF libraries:', error)
-    })
-  }
-
   const exportToExcel = () => {
     if (!activeEstimate) {
       console.log('No active estimate')
@@ -553,7 +450,7 @@ export default function EstimatePage() {
       // Подготавливаем данные для таблицы
       const tableData = [
         // Заголовки
-        ['№', 'Наименование', 'Количество', 'Единица измерения', 'Цена', 'Себестоимость', 'Сумма'],
+        ['№', 'Наименование', 'Количество', 'Единица измерения', 'Цена', 'Себестоимость', 'Сумма', 'Комментарий'],
         // Позиции сметы
         ...activeEstimate.items.map((item, index) => [
           index + 1,
@@ -562,19 +459,20 @@ export default function EstimatePage() {
           item.unit,
           item.unitPrice,
           item.costPrice,
-          item.quantity * item.unitPrice
+          item.quantity * item.unitPrice,
+          item.notes || ''
         ]),
         // Пустая строка
         [],
         // Итоговые расчеты
-        ['', '', '', '', '', 'Себестоимость:', activeEstimate.totalCost],
-        ['', '', '', '', '', 'Прибыль:', activeEstimate.profit],
-        ['', '', '', '', '', 'Сумма без НДС:', activeEstimate.total],
+        ['', '', '', '', '', '', 'Себестоимость:', activeEstimate.totalCost],
+        ['', '', '', '', '', '', 'Прибыль:', activeEstimate.profit],
+        ['', '', '', '', '', '', 'Сумма без НДС:', activeEstimate.total],
         ...(activeEstimate.vatEnabled ? [
-          ['', '', '', '', '', `НДС (${activeEstimate.vatRate}%):`, activeEstimate.vatAmount],
-          ['', '', '', '', '', 'ИТОГО:', activeEstimate.totalWithVat]
+          ['', '', '', '', '', '', `НДС (${activeEstimate.vatRate}%):`, activeEstimate.vatAmount],
+          ['', '', '', '', '', '', 'ИТОГО:', activeEstimate.totalWithVat]
         ] : [
-          ['', '', '', '', '', 'ИТОГО:', activeEstimate.total]
+          ['', '', '', '', '', '', 'ИТОГО:', activeEstimate.total]
         ])
       ]
 
@@ -589,12 +487,13 @@ export default function EstimatePage() {
         { wch: 15 },  // Единица измерения
         { wch: 15 },  // Цена
         { wch: 15 },  // Себестоимость
-        { wch: 15 }   // Сумма
+        { wch: 15 },  // Сумма
+        { wch: 40 }   // Комментарий
       ]
       worksheet['!cols'] = colWidths
 
       // Стилизация заголовков
-      const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:G1')
+      const headerRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:H1')
       for (let col = headerRange.s.c; col <= headerRange.e.c; col++) {
         const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col })
         if (!worksheet[cellAddress]) continue
@@ -615,7 +514,7 @@ export default function EstimatePage() {
       // Стилизация итоговых строк
       const totalStartRow = activeEstimate.items.length + 2
       for (let row = totalStartRow; row < tableData.length; row++) {
-        for (let col = 0; col < 7; col++) {
+        for (let col = 0; col < 8; col++) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col })
           if (!worksheet[cellAddress]) continue
           
@@ -770,9 +669,9 @@ export default function EstimatePage() {
         className="min-h-screen bg-gray-50" 
         style={{ marginLeft: isNavCollapsed ? '0' : '0' }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12 py-10">
           {/* Заголовок */}
-          <div className="mb-8">
+          <div className="mb-10">
             <div className="flex items-center gap-4 mb-4">
               <Link 
                 href={`/projects/${projectId}`}
@@ -785,8 +684,8 @@ export default function EstimatePage() {
             
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">Сметы проекта</h1>
-                <p className="text-gray-600 mt-1">
+                <h1 className="text-4xl font-bold text-gray-900 mb-2">Сметы проекта</h1>
+                <p className="text-lg text-gray-600">
                   {project?.name} • Бюджет: {project?.budget ? formatCurrency(project.budget) : 'Не установлен'}
                 </p>
               </div>
@@ -814,7 +713,7 @@ export default function EstimatePage() {
           </div>
 
           {/* Панель инструментов */}
-          <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+          <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="relative">
@@ -932,16 +831,17 @@ export default function EstimatePage() {
             </div>
 
             {/* Редактор сметы */}
-            <div className="bg-white rounded-lg shadow-sm border min-h-[600px]">
+            <div className="bg-white rounded-xl shadow-sm border min-h-[600px]">
               {activeEstimate ? (
                 <>
 
                   {/* Заголовок сметы */}
-                  <div className="p-6 border-b border-gray-200">
+                  <div className="p-8 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">{activeEstimate.name}</h2>
                         {activeEstimate.description && (
-                          <p className="text-gray-600">{activeEstimate.description}</p>
+                          <p className="text-base text-gray-600">{activeEstimate.description}</p>
                         )}
                       </div>
                     </div>
@@ -949,52 +849,63 @@ export default function EstimatePage() {
 
                   {/* Таблица позиций */}
                   <div className="overflow-x-auto" ref={tableRef}>
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b-2 border-gray-300">
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-16 border-r border-gray-200">
                             №
                           </th>
                           {showCategories && (
-                            <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                            <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider w-48 border-r border-gray-200">
                               Категория
                             </th>
                           )}
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[250px] border-r border-gray-200">
                             Наименование
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-36">
+                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-40 border-r border-gray-200">
                             Кол-во
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                            Ед.
+                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-48 border-r border-gray-200">
+                            Ед. изм.
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                          <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider w-56 border-r border-gray-200">
                             Цена
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                          <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider w-56 border-r border-gray-200">
                             Себест.
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                          <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider w-56 border-r border-gray-200">
                             Сумма
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                          <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider min-w-[200px] border-r border-gray-200">
+                            Комментарий
+                          </th>
+                          <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider w-24">
                             Действия
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody>
                         {activeEstimate.items.map((item, index) => (
-                          <tr key={item.id} className={`hover:bg-gray-50 transition-colors ${item.isNew ? 'bg-blue-50' : ''}`}>
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                          <tr 
+                            key={item.id} 
+                            className={`
+                              border-b border-gray-200 transition-all duration-150
+                              ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}
+                              ${item.isNew ? 'bg-blue-50 border-blue-200' : ''}
+                              hover:bg-blue-50/50 hover:shadow-sm
+                            `}
+                          >
+                            <td className="px-4 py-4 text-center text-sm font-semibold text-gray-600 border-r border-gray-200">
                               {index + 1}
                             </td>
                             {showCategories && (
-                              <td className="px-6 py-4">
+                              <td className="px-4 py-4 border-r border-gray-200">
                                 <select
                                   value={item.category}
                                   onChange={(e) => updateItem(item.id, 'category', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm bg-white"
                                 >
                                   {categories.map(category => (
                                     <option key={category} value={category}>{category}</option>
@@ -1002,16 +913,16 @@ export default function EstimatePage() {
                                 </select>
                               </td>
                             )}
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4 border-r border-gray-200">
                               <input
                                 type="text"
                                 value={item.name}
                                 onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm bg-white"
                                 placeholder="Наименование позиции"
                               />
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4 text-center border-r border-gray-200">
                               <input
                                 type="text"
                                 value={item.quantity > 0 ? formatNumber(item.quantity) : ''}
@@ -1019,23 +930,28 @@ export default function EstimatePage() {
                                   const value = e.target.value.replace(/\s/g, '').replace(',', '.')
                                   updateItem(item.id, 'quantity', Number(value) || 0)
                                 }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-right"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-right text-sm bg-white font-medium"
                                 placeholder="0"
                               />
                             </td>
-                            <td className="px-6 py-4">
-                              <select
-                                value={item.unit}
-                                onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm"
-                                style={{ paddingRight: '2rem' }}
-                              >
-                                {units.map(unit => (
-                                  <option key={unit} value={unit}>{unit}</option>
-                                ))}
-                              </select>
+                            <td className="px-4 py-4 text-center border-r border-gray-200">
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  list={`units-${item.id}`}
+                                  value={item.unit || ''}
+                                  onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
+                                  className="w-full px-3 py-2 border-2 border-blue-400 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-sm font-bold text-center bg-blue-100 text-gray-900"
+                                  placeholder="шт"
+                                />
+                                <datalist id={`units-${item.id}`}>
+                                  {units.map(unit => (
+                                    <option key={unit} value={unit} />
+                                  ))}
+                                </datalist>
+                              </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4 text-right border-r border-gray-200">
                               <input
                                 type="text"
                                 value={item.unitPrice > 0 ? formatNumber(item.unitPrice) : ''}
@@ -1043,11 +959,11 @@ export default function EstimatePage() {
                                   const value = e.target.value.replace(/\s/g, '').replace(',', '.')
                                   updateItem(item.id, 'unitPrice', Number(value) || 0)
                                 }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-right"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-right text-sm font-semibold bg-white whitespace-nowrap"
                                 placeholder="0.00"
                               />
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4 text-right border-r border-gray-200">
                               <input
                                 type="text"
                                 value={item.costPrice > 0 ? formatNumber(item.costPrice) : ''}
@@ -1055,16 +971,44 @@ export default function EstimatePage() {
                                   const value = e.target.value.replace(/\s/g, '').replace(',', '.')
                                   updateItem(item.id, 'costPrice', Number(value) || 0)
                                 }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-right"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-right text-sm font-semibold bg-white whitespace-nowrap"
                                 placeholder="0.00"
                               />
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm font-semibold text-gray-900 bg-gray-50 px-3 py-2 rounded-md">
+                            <td className="px-4 py-4 text-right border-r border-gray-200">
+                              <div className="text-sm font-bold text-gray-900 bg-gray-100 px-3 py-2 rounded-md text-right whitespace-nowrap">
                                 {formatCurrency(item.total)}
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-4 border-r border-gray-200">
+                              <div className="relative group">
+                                <button
+                                  onClick={() => {
+                                    const notes = prompt('Комментарий к позиции:', item.notes || '')
+                                    if (notes !== null) {
+                                      updateItem(item.id, 'notes', notes)
+                                    }
+                                  }}
+                                  className={`w-full px-3 py-2 border border-gray-300 rounded-md hover:border-blue-400 transition-colors text-left text-xs ${
+                                    item.notes ? 'bg-blue-50 border-blue-300' : 'bg-white'
+                                  }`}
+                                  title={item.notes || 'Добавить комментарий'}
+                                >
+                                  {item.notes ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <MessageSquare className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" />
+                                      <span className="truncate text-gray-700">{item.notes}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 text-gray-400">
+                                      <MessageSquare className="h-3.5 w-3.5" />
+                                      <span>Добавить</span>
+                                    </div>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 text-center">
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => duplicateItem(item.id)}
@@ -1090,37 +1034,37 @@ export default function EstimatePage() {
                   </div>
 
                   {/* Кнопка добавления позиции */}
-                  <div className="p-6 border-t border-gray-200 bg-gray-50">
+                  <div className="p-8 border-t border-gray-200 bg-gray-50">
                     <button
                       onClick={addNewItem}
-                      className="w-full flex items-center justify-center gap-3 py-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200"
+                      className="w-full flex items-center justify-center gap-3 py-5 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 text-base font-medium"
                     >
-                      <Plus className="h-5 w-5" />
-                      <span className="font-medium">Добавить позицию</span>
+                      <Plus className="h-6 w-6" />
+                      <span>Добавить позицию</span>
                     </button>
                   </div>
 
                   {/* Панель НДС и расчеты */}
-                  <div className="p-6 bg-gray-50 border-t border-gray-200">
+                  <div className="p-8 bg-gray-50 border-t border-gray-200">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-2">
+                      <div className="flex items-center gap-6">
+                        <label className="flex items-center gap-3">
                           <input
                             type="checkbox"
                             checked={activeEstimate.vatEnabled}
                             onChange={toggleVat}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                           />
-                          <span className="text-sm font-medium text-gray-700">Включить НДС</span>
+                          <span className="text-base font-medium text-gray-700">Включить НДС</span>
                         </label>
                         
                         {activeEstimate.vatEnabled && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">Ставка НДС:</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-base text-gray-600">Ставка НДС:</span>
                             <select
                               value={activeEstimate.vatRate}
                               onChange={(e) => updateVatRate(Number(e.target.value))}
-                              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              className="px-4 py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
                               <option value={0}>0%</option>
                               <option value={10}>10%</option>
@@ -1130,74 +1074,66 @@ export default function EstimatePage() {
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-8">
                         {/* Расчеты сметы */}
-                        <div className="text-right space-y-1">
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm text-gray-600">Себестоимость:</span>
-                            <span className="font-medium">{formatCurrency(activeEstimate.totalCost)}</span>
+                        <div className="text-right space-y-2">
+                          <div className="flex items-center gap-6">
+                            <span className="text-base text-gray-600">Себестоимость:</span>
+                            <span className="text-base font-semibold">{formatCurrency(activeEstimate.totalCost)}</span>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm text-gray-600">Прибыль:</span>
-                            <span className={`font-medium ${activeEstimate.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <div className="flex items-center gap-6">
+                            <span className="text-base text-gray-600">Прибыль:</span>
+                            <span className={`text-base font-semibold ${activeEstimate.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               {formatCurrency(activeEstimate.profit)}
                             </span>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span className="text-sm text-gray-600">Сумма без НДС:</span>
-                            <span className="font-medium">{formatCurrency(activeEstimate.total)}</span>
+                          <div className="flex items-center gap-6">
+                            <span className="text-base text-gray-600">Сумма без НДС:</span>
+                            <span className="text-base font-semibold">{formatCurrency(activeEstimate.total)}</span>
                           </div>
                           {activeEstimate.vatEnabled && (
-                            <div className="flex items-center gap-4">
-                              <span className="text-sm text-gray-600">НДС ({activeEstimate.vatRate}%):</span>
-                              <span className="font-medium text-orange-600">{formatCurrency(activeEstimate.vatAmount)}</span>
+                            <div className="flex items-center gap-6">
+                              <span className="text-base text-gray-600">НДС ({activeEstimate.vatRate}%):</span>
+                              <span className="text-base font-semibold text-orange-600">{formatCurrency(activeEstimate.vatAmount)}</span>
                             </div>
                           )}
-                          <div className="flex items-center gap-4 border-t pt-1">
-                            <span className="text-sm font-semibold text-gray-700">Итого:</span>
-                            <span className="text-xl font-bold text-green-600">
+                          <div className="flex items-center gap-6 border-t border-gray-300 pt-2 mt-2">
+                            <span className="text-lg font-bold text-gray-800">Итого:</span>
+                            <span className="text-2xl font-bold text-green-600">
                               {formatCurrency(activeEstimate.vatEnabled ? activeEstimate.totalWithVat : activeEstimate.total)}
                             </span>
                           </div>
                         </div>
                         
                         {/* Кнопки действий */}
-                        <div className="flex gap-2">
+                        <div className="flex gap-3">
                           <button
                             onClick={saveEstimate}
                             disabled={!hasUnsavedChanges || isSaving}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-colors text-base ${
                               hasUnsavedChanges 
                                 ? 'bg-blue-600 text-white hover:bg-blue-700' 
                                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                             }`}
                           >
-                            <Save className="h-4 w-4" />
+                            <Save className="h-5 w-5" />
                             {isSaving ? 'Сохранение...' : 'Сохранить'}
                           </button>
                           
                           <button
-                            onClick={exportToPDF}
-                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                            title="Экспорт в PDF"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                          
-                          <button
                             onClick={exportToExcel}
-                            className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg"
+                            className="p-3 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                             title="Экспорт в Excel"
                           >
-                            <FileText className="h-4 w-4" />
+                            <FileText className="h-5 w-5" />
                           </button>
                           
                           <button
                             onClick={generateCommercialOffer}
-                            className="p-2 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg"
+                            className="p-3 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                             title="Генерировать коммерческое предложение"
                           >
-                            <Calculator className="h-4 w-4" />
+                            <Calculator className="h-5 w-5" />
                           </button>
                         </div>
                       </div>
@@ -1340,17 +1276,6 @@ export default function EstimatePage() {
               <p className="text-gray-600 mb-6">Выберите формат для экспорта сметы</p>
               
               <div className="space-y-4">
-                <button
-                  onClick={exportToPDF}
-                  className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                >
-                  <Download className="h-5 w-5 text-blue-600" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">PDF документ</div>
-                    <div className="text-sm text-gray-600">Для печати и отправки клиенту</div>
-                  </div>
-                </button>
-                
                 <button
                   onClick={exportToExcel}
                   className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-colors"

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, CheckCircle, X, Clock, XCircle, FileText, Users, Calendar, MessageSquare, Paperclip, History, AlertCircle, Eye } from 'lucide-react'
+import { Plus, CheckCircle, X, Clock, XCircle, FileText, Users, Calendar, MessageSquare, Paperclip, History, AlertCircle, Eye, Trash2 } from 'lucide-react'
 import ExpandableDescription from '@/components/expandable-description'
 import ApprovalProgress from '@/components/approval-progress'
 
@@ -240,10 +240,20 @@ export default function ApprovalsPage() {
       })
 
       if (response.ok) {
-        fetchApprovals()
+        const result = await response.json()
+        console.log('Approval response:', result)
+        await fetchApprovals()
+        // Обновляем выбранное согласование если оно открыто
+        if (selectedApproval?.id === approvalId) {
+          setSelectedApproval(result)
+        }
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Ошибка при одобрении')
       }
     } catch (err) {
       console.error(err)
+      alert('Ошибка при одобрении')
     }
   }
 
@@ -258,10 +268,20 @@ export default function ApprovalsPage() {
       })
 
       if (response.ok) {
-        fetchApprovals()
+        const result = await response.json()
+        console.log('Reject response:', result)
+        await fetchApprovals()
+        // Обновляем выбранное согласование если оно открыто
+        if (selectedApproval?.id === approvalId) {
+          setSelectedApproval(result)
+        }
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Ошибка при отклонении')
       }
     } catch (err) {
       console.error(err)
+      alert('Ошибка при отклонении')
     }
   }
 
@@ -322,6 +342,27 @@ export default function ApprovalsPage() {
     } catch (error) {
       console.error('Error deleting attachment:', error)
       alert('Ошибка при удалении файла')
+    }
+  }
+
+  const handleDeleteApproval = async (approvalId: string) => {
+    if (!confirm('Вы уверены, что хотите удалить это согласование? Это действие необратимо.')) return
+
+    try {
+      const response = await fetch(`/api/approvals/${approvalId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        setApprovals(prev => prev.filter(a => a.id !== approvalId))
+        setShowDetailsModal(false)
+        setSelectedApproval(null)
+      } else {
+        alert('Ошибка при удалении согласования')
+      }
+    } catch (error) {
+      console.error('Error deleting approval:', error)
+      alert('Ошибка при удалении согласования')
     }
   }
 
@@ -556,7 +597,7 @@ export default function ApprovalsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '200px' }}>Согласование</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тип</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Приоритет</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Срок</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{ width: '140px' }}>Срок</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Проект</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Создатель</th>
@@ -616,7 +657,7 @@ export default function ApprovalsPage() {
                           {getPriorityText(approval.priority)}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" style={{ width: '140px' }}>
                         {approval.dueDate ? (
                           <div className={`text-sm ${isOverdue(approval.dueDate) ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
                             {new Date(approval.dueDate).toLocaleDateString('ru-RU')}
@@ -713,6 +754,15 @@ export default function ApprovalsPage() {
                               </Button>
                             </>
                           )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteApproval(approval.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Удалить согласование"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1125,12 +1175,22 @@ export default function ApprovalsPage() {
                       </>
                     )}
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowDetailsModal(false)}
-                  >
-                    Закрыть
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDeleteApproval(selectedApproval.id)}
+                      className="text-red-600 border-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Удалить
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDetailsModal(false)}
+                    >
+                      Закрыть
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

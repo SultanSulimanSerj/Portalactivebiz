@@ -53,8 +53,7 @@ export async function POST(
       },
       data: {
         status,
-        comment: comment || null,
-        respondedAt: new Date()
+        comment: comment || null
       }
     })
 

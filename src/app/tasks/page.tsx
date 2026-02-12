@@ -301,7 +301,7 @@ export default function TasksPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Задача</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-36">Статус</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Приоритет</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Проект</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Исполнители</th>
@@ -325,7 +325,7 @@ export default function TasksPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 w-36">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded border ${getStatusColor(task.status)}`}>
                         {getStatusText(task.status)}
                       </span>
