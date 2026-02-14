@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { getCacheKey, getFromCache, setCache } from '@/lib/cache'
@@ -7,7 +8,6 @@ import { performanceMonitor } from '@/lib/monitoring'
 import { createErrorAlert } from '@/lib/alerts'
 import { notifyFinancialUpdate } from '@/lib/notifications'
 import { UserRole } from '@/lib/permissions'
-import { generateId } from '@/lib/id-generator'
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now()
@@ -24,6 +24,12 @@ export async function GET(request: NextRequest) {
       await logger.security('Unauthorized access attempt to finance API', { requestId })
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
+    if (!user.id) {
+      return NextResponse.json({ error: 'Пользователь не определён' }, { status: 401 })
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
@@ -38,30 +44,37 @@ export async function GET(request: NextRequest) {
     //   return NextResponse.json(cached)
     // }
 
-    // Фильтрация финансов в зависимости от роли пользователя
-    let where: any = {
-      project: {
-        companyId: user.companyId!
-      },
-      ...(projectId && { projectId }),
-      ...(type && { type: type as 'INCOME' | 'EXPENSE' }),
-      ...(startDate && endDate && {
-        date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate)
-        }
-      })
+    // Фильтр по компании: по companyId или по project.companyId для старых записей
+    const companyFilter = {
+      OR: [
+        { companyId: user.companyId! },
+        { companyId: null, project: { companyId: user.companyId! } }
+      ] as const
     }
 
-    // OWNER и ADMIN видят все финансовые записи компании
-    if (user.role === UserRole.OWNER || user.role === UserRole.ADMIN) {
-      // Никаких дополнительных ограничений
-    } else {
-      // MANAGER и USER видят только финансовые записи проектов, где являются участниками
-      where.project.OR = [
-        { creatorId: user.id }, // Пользователь создал проект
-        { users: { some: { userId: user.id } } } // Пользователь является участником проекта
+    let where: any = {
+      AND: [
+        companyFilter,
+        ...(projectId ? [{ projectId }] : []),
+        ...(type ? [{ type: type as 'INCOME' | 'EXPENSE' }] : []),
+        ...(startDate && endDate ? [{
+          date: {
+            gte: new Date(startDate),
+            lte: new Date(endDate)
+          }
+        }] : [])
       ]
+    }
+
+    if (user.role !== UserRole.OWNER && user.role !== UserRole.ADMIN) {
+      where.AND.push({
+        project: {
+          OR: [
+            { creatorId: user.id },
+            { users: { some: { userId: user.id } } }
+          ]
+        }
+      })
     }
 
     const finances = await prisma.finance.findMany({
@@ -144,30 +157,59 @@ export async function POST(request: NextRequest) {
     if (!allowed) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
+    if (!user.id) {
+      return NextResponse.json({ error: 'Пользователь не определён' }, { status: 401 })
+    }
 
     const body = await request.json()
-    const { type, category, description, amount, date, projectId, estimateItemId } = body
+    const { type, category, description, amount, date, projectId, estimateItemId, invoiceNumber, counterparty } = body
     
+    // projectId обязателен (схема Finance)
+    if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
+      return NextResponse.json({ error: 'Укажите проект' }, { status: 400 })
+    }
+
     // Валидация суммы
     const parsedAmount = parseFloat(amount)
     if (isNaN(parsedAmount) || parsedAmount < 0) {
       return NextResponse.json({ error: 'Некорректная сумма' }, { status: 400 })
     }
-    
-    console.log('Creating finance record:', { type, category, description, amount: parsedAmount, date, projectId })
 
+    if (!category || typeof category !== 'string' || category.trim() === '') {
+      return NextResponse.json({ error: 'Укажите категорию' }, { status: 400 })
+    }
+
+    const project = await prisma.project.findFirst({
+      where: { id: projectId },
+      select: { companyId: true }
+    })
+    if (!project) {
+      return NextResponse.json({ error: 'Проект не найден' }, { status: 400 })
+    }
+    const companyId = project.companyId ?? user.companyId ?? null
+    
+    const financeType = type === 'EXPENSE' ? 'EXPENSE' : 'INCOME'
+    const financeDate = date ? new Date(date) : new Date()
+    if (isNaN(financeDate.getTime())) {
+      return NextResponse.json({ error: 'Некорректная дата' }, { status: 400 })
+    }
+
+    const estItemId = typeof estimateItemId === 'string' && estimateItemId.trim() ? estimateItemId.trim() : null
+    const invNumber = typeof invoiceNumber === 'string' && invoiceNumber.trim() ? invoiceNumber.trim() : null
+    const counter = typeof counterparty === 'string' && counterparty.trim() ? counterparty.trim() : null
+
+    // Создаём без counterparty и invoiceNumber — старый Prisma Client их не знает; потом допишем через raw SQL
     const finance = await prisma.finance.create({
       data: {
-        id: generateId(),
-        type,
-        category: category || 'Other',
-        description: description || null,
+        type: financeType,
+        category: category.trim(),
+        description: typeof description === 'string' && description.trim() ? description.trim() : null,
         amount: parsedAmount,
-        date: date ? new Date(date) : new Date(),
-        projectId: projectId || '1', // Используем projectId напрямую
-        creatorId: user.id, // Используем creatorId напрямую
-        estimateItemId: estimateItemId || null,
-        updatedAt: new Date()
+        date: financeDate,
+        projectId,
+        creatorId: user.id,
+        companyId,
+        ...(estItemId ? { estimateItemId: estItemId } : {})
       },
       include: {
         project: {
@@ -175,6 +217,16 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+
+    if (invNumber !== null || counter !== null) {
+      try {
+        await prisma.$executeRaw(
+          Prisma.sql`UPDATE "Finance" SET "invoiceNumber" = ${invNumber}, "counterparty" = ${counter} WHERE "id" = ${finance.id}`
+        )
+      } catch (rawErr) {
+        console.error('Finance update invoiceNumber/counterparty:', rawErr)
+      }
+    }
 
     // Отправляем уведомления участникам проекта
     if (projectId && finance.project) {
@@ -204,8 +256,16 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(finance, { status: 201 })
-  } catch (error) {
-    console.error('Error creating finance record:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error))
+    console.error('Error creating finance record:', err.message, err.stack)
+    if (err.name === 'PrismaClientKnownRequestError') {
+      const prismaErr = error as { code?: string; meta?: unknown }
+      console.error('Prisma code:', prismaErr.code, 'meta:', prismaErr.meta)
+    }
+    return NextResponse.json(
+      { error: 'Не удалось сохранить запись. Попробуйте ещё раз или обратитесь к администратору.' },
+      { status: 500 }
+    )
   }
 }

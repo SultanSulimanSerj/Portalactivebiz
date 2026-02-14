@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { authenticateUser } from '@/lib/auth-api'
 import { generateContractDocument, ContractData } from '@/lib/document-generator'
 import { Packer } from 'docx'
-import { promises as fs } from 'fs'
 import path from 'path'
+import { uploadFile } from '@/lib/storage'
 
 export async function POST(request: NextRequest) {
   try {
@@ -121,23 +121,15 @@ export async function POST(request: NextRequest) {
     // Конвертируем в Buffer
     const buffer = await Packer.toBuffer(doc)
 
-    // Формируем имена файлов
+    // Формируем имена файлов и ключ в MinIO
     const timestamp = Date.now()
     const documentTypeLabel = documentType === 'contract' ? 'Договор_подряда' : documentType
     const fileName = `${documentTypeLabel}_${timestamp}.docx`
     const uniqueFileName = `${timestamp}_${fileName}`
+    const storageKey = `documents/${user.companyId}/${uniqueFileName}`
 
-    // Создаем папку uploads если её нет
-    const uploadsDir = path.join(process.cwd(), 'uploads')
-    try {
-      await fs.access(uploadsDir)
-    } catch {
-      await fs.mkdir(uploadsDir, { recursive: true })
-    }
-
-    // Сохраняем файл
-    const filePath = path.join(uploadsDir, uniqueFileName)
-    await fs.writeFile(filePath, buffer)
+    // Загружаем файл в MinIO
+    await uploadFile(storageKey, Buffer.from(buffer), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 
     // Создаем запись в базе данных
     console.log('📝 Создание документа с данными:', {
@@ -151,7 +143,7 @@ export async function POST(request: NextRequest) {
         title: fileName.replace('.docx', ''),
         description: `Автоматически сгенерированный документ: ${documentTypeLabel}`,
         fileName: fileName,
-        filePath: uniqueFileName,
+        filePath: storageKey,
         fileSize: buffer.length,
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         category: 'CONTRACT',
@@ -159,7 +151,8 @@ export async function POST(request: NextRequest) {
         isPublished: true,
         publishedAt: new Date(),
         projectId: projectId,
-        creatorId: user.id
+        creatorId: user.id,
+        companyId: user.companyId || null
       },
       include: {
         project: {

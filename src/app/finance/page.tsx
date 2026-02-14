@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Layout from '@/components/layout'
-import { Plus, TrendingUp, TrendingDown, Filter, X, Trash2, ArrowLeft, DollarSign, Percent, Download, Settings } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, Filter, X, Trash2, ArrowLeft, DollarSign, Percent, Download, Settings, Building2, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
@@ -21,15 +21,27 @@ interface FinanceRecord {
   date: string
   description: string | null
   project: { id: string; name: string } | null
+  invoiceNumber?: string | null
+  counterparty?: string | null
+}
+
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  PLANNING: 'Планирование',
+  ACTIVE: 'Активный',
+  ON_HOLD: 'Приостановлен',
+  COMPLETED: 'Завершён',
+  CANCELLED: 'Отменён'
 }
 
 export default function FinancePage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const projectIdFromUrl = searchParams?.get('projectId')
   
   const [records, setRecords] = useState<FinanceRecord[]>([])
   const [projects, setProjects] = useState<any[]>([])
   const [currentProject, setCurrentProject] = useState<any>(null)
+  const [projectSearch, setProjectSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState('all')
   const [showModal, setShowModal] = useState(false)
@@ -49,12 +61,14 @@ export default function FinancePage() {
     type: 'invoice' | 'payment'
     amount: number
     dueDate: string
+    date?: string
     isPaid: boolean
     paidAt: string | null
     paidBy: { id: string; name: string } | null
     status: 'paid' | 'pending' | 'overdue'
     description?: string
     category?: string
+    counterparty?: string | null
   }>>([])
   const [formData, setFormData] = useState({
     type: 'INCOME',
@@ -63,18 +77,27 @@ export default function FinancePage() {
     date: new Date().toISOString().split('T')[0],
     description: '',
     projectId: projectIdFromUrl || '',
-    estimateItemId: ''
+    estimateItemId: '',
+    invoiceNumber: '',
+    counterparty: ''
   })
-  const [estimateItems, setEstimateItems] = useState<Array<{id: string, name: string}>>([])
+  const [estimateItems, setEstimateItems] = useState<Array<{id: string, name: string, category: string}>>([])
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchRecords()
     fetchProjects()
-    fetchCategoriesData()
-    fetchInvoicesData()
     if (projectIdFromUrl) {
       fetchCurrentProject()
       fetchEstimateItems(projectIdFromUrl)
+      fetchCategoriesData(projectIdFromUrl)
+      fetchInvoicesData(projectIdFromUrl)
+    } else {
+      setCurrentProject(null)
+      setCategoriesData([])
+      setInvoicesData([])
     }
   }, [projectIdFromUrl])
 
@@ -92,10 +115,14 @@ export default function FinancePage() {
       const response = await fetch(`/api/projects/${projectId}/estimates`)
       if (response.ok) {
         const estimates = await response.json()
-        const items: Array<{id: string, name: string}> = []
+        const items: Array<{id: string, name: string, category: string}> = []
         estimates.forEach((est: any) => {
           est.items?.forEach((item: any) => {
-            items.push({ id: item.id, name: `${item.name} (${est.name})` })
+            items.push({
+              id: item.id,
+              name: `${item.name} (${est.name})`,
+              category: item.category || 'Материалы'
+            })
           })
         })
         setEstimateItems(items)
@@ -104,6 +131,16 @@ export default function FinancePage() {
       console.error('Error fetching estimate items:', err)
     }
   }
+
+  // Уникальные категории из сметы проекта (для выбора при расходе)
+  const estimateCategories = Array.from(new Set(estimateItems.map(i => i.category))).sort()
+
+  // Для расхода при появлении категорий из сметы подставляем первую категорию, если категория пустая
+  useEffect(() => {
+    if (formData.type === 'EXPENSE' && formData.projectId && estimateCategories.length > 0 && !formData.category?.trim()) {
+      setFormData(prev => ({ ...prev, category: estimateCategories[0] }))
+    }
+  }, [formData.type, formData.projectId, estimateCategories.join(','), formData.category])
 
   // Пересчитываем данные бюджета когда records или currentProject меняются
   useEffect(() => {
@@ -194,12 +231,10 @@ export default function FinancePage() {
     }
   }
 
-  const fetchCategoriesData = async () => {
+  const fetchCategoriesData = async (projectId?: string | null) => {
     try {
-      const response = await fetch('/api/finance/categories', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      })
+      const url = projectId ? `/api/finance/categories?projectId=${projectId}` : '/api/finance/categories'
+      const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
       if (response.ok) {
         const data = await response.json()
         setCategoriesData(data)
@@ -209,15 +244,13 @@ export default function FinancePage() {
     }
   }
 
-  const fetchInvoicesData = async () => {
+  const fetchInvoicesData = async (projectId?: string | null) => {
     try {
-      const response = await fetch('/api/finance/invoices', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      })
+      const url = projectId ? `/api/finance/invoices?projectId=${projectId}` : '/api/finance/invoices'
+      const response = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json' } })
       if (response.ok) {
         const data = await response.json()
-        setInvoicesData(data)
+        setInvoicesData(data.invoices ?? data)
       }
     } catch (err) {
       console.error('Error fetching invoices data:', err)
@@ -226,8 +259,7 @@ export default function FinancePage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects', {
-      })
+      const response = await fetch('/api/projects?limit=200')
       if (response.ok) {
         const data = await response.json()
         setProjects(data.projects || [])
@@ -237,8 +269,28 @@ export default function FinancePage() {
     }
   }
 
+  const setSelectedProject = (id: string | null) => {
+    if (id) router.push(`/finance?projectId=${id}`)
+    else router.push('/finance')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setMessage(null)
+    setSubmitError(null)
+    if (!formData.projectId?.trim()) {
+      setSubmitError('Выберите проект')
+      return
+    }
+    if (!formData.category?.trim()) {
+      setSubmitError('Укажите категорию')
+      return
+    }
+    const amountNum = parseFloat(String(formData.amount).replace(',', '.'))
+    if (isNaN(amountNum) || amountNum < 0) {
+      setSubmitError('Введите корректную сумму')
+      return
+    }
     try {
       const response = await fetch('/api/finance', {
         method: 'POST',
@@ -247,14 +299,21 @@ export default function FinancePage() {
         },
         body: JSON.stringify({
           ...formData,
-          amount: parseFloat(formData.amount),
-          projectId: formData.projectId || null,
-          estimateItemId: formData.estimateItemId || null
+          amount: amountNum,
+          projectId: formData.projectId.trim(),
+          category: formData.category.trim(),
+          estimateItemId: formData.estimateItemId || null,
+          invoiceNumber: formData.invoiceNumber?.trim() || null,
+          counterparty: formData.counterparty?.trim() || null
         })
       })
 
+      const data = response.ok ? null : await response.json().catch(() => ({}))
+      const errorText = (data?.error as string) || (response.ok ? '' : 'Не удалось добавить запись')
+
       if (response.ok) {
         setShowModal(false)
+        setSubmitError(null)
         setFormData({
           type: 'INCOME',
           category: '',
@@ -262,28 +321,44 @@ export default function FinancePage() {
           date: new Date().toISOString().split('T')[0],
           description: '',
           projectId: '',
-          estimateItemId: ''
+          estimateItemId: '',
+          invoiceNumber: '',
+          counterparty: ''
         })
         fetchRecords()
+        if (projectIdFromUrl) fetchInvoicesData(projectIdFromUrl)
+        fetchCategoriesData(projectIdFromUrl || undefined)
+      } else {
+        setSubmitError(errorText)
+        setMessage({ type: 'error', text: errorText })
       }
     } catch (err) {
       console.error(err)
+      const errMsg = err instanceof Error ? err.message : 'Ошибка при добавлении записи'
+      setSubmitError(errMsg)
+      setMessage({ type: 'error', text: errMsg })
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Удалить запись?')) return
-
+  const handleDeleteClick = (id: string) => setDeleteConfirmId(id)
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return
+    setMessage(null)
     try {
-      const response = await fetch(`/api/finance/${id}`, {
-        method: 'DELETE',
-      })
-
+      const response = await fetch(`/api/finance/${deleteConfirmId}`, { method: 'DELETE' })
       if (response.ok) {
         fetchRecords()
+        setDeleteConfirmId(null)
+        setMessage({ type: 'success', text: 'Запись удалена' })
+        setTimeout(() => setMessage(null), 3000)
+      } else {
+        setMessage({ type: 'error', text: 'Не удалось удалить запись' })
       }
     } catch (err) {
       console.error(err)
+      setMessage({ type: 'error', text: 'Ошибка при удалении' })
+    } finally {
+      setDeleteConfirmId(null)
     }
   }
 
@@ -332,13 +407,13 @@ export default function FinancePage() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Export error:', err)
-      alert('Ошибка экспорта')
+      setMessage({ type: 'error', text: 'Ошибка экспорта' })
     }
   }
 
   const handleBudgetSettings = () => {
     if (!projectIdFromUrl) {
-      alert('Выберите проект для настройки бюджета')
+      setMessage({ type: 'error', text: 'Выберите проект для настройки бюджета' })
       return
     }
     setBudgetFormData(String(currentProject?.budget || 0))
@@ -361,26 +436,45 @@ export default function FinancePage() {
         setShowBudgetModal(false)
         fetchBudgetData()
       } else {
-        alert('Ошибка сохранения бюджета')
+        setMessage({ type: 'error', text: 'Ошибка сохранения бюджета' })
       }
     } catch (err) {
       console.error(err)
-      alert('Ошибка сохранения бюджета')
+      setMessage({ type: 'error', text: 'Ошибка сохранения бюджета' })
     }
   }
 
   const handleAddOperation = () => {
+    setSubmitError(null)
     setShowModal(true)
   }
 
   const handleCreateInvoice = () => {
-    // TODO: Implement create invoice functionality
-    console.log('Create invoice clicked')
+    setSubmitError(null)
+    setFormData(prev => ({
+      ...prev,
+      type: 'INCOME',
+      projectId: projectIdFromUrl || prev.projectId,
+      amount: '',
+      category: '',
+      description: '',
+      date: new Date().toISOString().split('T')[0]
+    }))
+    setShowModal(true)
   }
 
   const handleCreatePayment = () => {
-    // TODO: Implement create payment functionality
-    console.log('Create payment clicked')
+    setSubmitError(null)
+    setFormData(prev => ({
+      ...prev,
+      type: 'EXPENSE',
+      projectId: projectIdFromUrl || prev.projectId,
+      amount: '',
+      category: '',
+      description: '',
+      date: new Date().toISOString().split('T')[0]
+    }))
+    setShowModal(true)
   }
 
   const handleMarkAsPaid = async (financeId: string, isPaid: boolean) => {
@@ -418,6 +512,11 @@ export default function FinancePage() {
   const balance = totalIncome - totalExpenses
   const margin = totalIncome > 0 ? ((balance / totalIncome) * 100) : 0
 
+  // Сводка по проектам для режима "все проекты"
+  const projectsForSummary = projectSearch.trim()
+    ? projects.filter(p => p.name?.toLowerCase().includes(projectSearch.toLowerCase()))
+    : projects
+
   if (loading) {
     return (
       <Layout>
@@ -431,94 +530,191 @@ export default function FinancePage() {
     )
   }
 
+  const formatMoney = (n: number) =>
+    new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + ' ₽'
+
   return (
     <Layout>
       <div className="space-y-6">
+        {message && (
+          <div className={`p-4 rounded-lg border flex items-center justify-between ${message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
+            <span>{message.text}</span>
+            <button onClick={() => setMessage(null)} className="text-sm underline">Скрыть</button>
+          </div>
+        )}
+
+        {deleteConfirmId && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/20" onClick={() => setDeleteConfirmId(null)} aria-hidden />
+            <div className="relative bg-white rounded-2xl shadow-xl border p-6 max-w-sm w-full text-center">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Удалить запись?</h3>
+              <p className="text-sm text-gray-600 mb-6">Действие необратимо.</p>
+              <div className="flex gap-3 justify-center">
+                <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Отмена</button>
+                <button onClick={handleDeleteConfirm} className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg">Удалить</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Выбор проекта */}
+        <div className="bg-white rounded-lg border p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              Проект:
+            </span>
+            <select
+              value={projectIdFromUrl || ''}
+              onChange={(e) => setSelectedProject(e.target.value || null)}
+              className="pl-3 pr-8 py-2 rounded-lg text-sm border border-gray-300 bg-white min-w-[200px] focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            >
+              <option value="">Все проекты — сводка</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {currentProject && (
+              <>
+                <Link
+                  href={`/projects/${currentProject.id}`}
+                  className="text-sm text-green-600 hover:text-green-800 flex items-center gap-1"
+                >
+                  Открыть проект
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+                <span className="text-xs text-gray-500 px-2 py-1 rounded bg-gray-100">
+                  {PROJECT_STATUS_LABELS[currentProject.status] || currentProject.status}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
         {/* Header */}
         {currentProject && (
           <Link 
-            href={`/projects/${currentProject.id}`}
+            href="/finance"
             className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+            onClick={(e) => { e.preventDefault(); setSelectedProject(null) }}
           >
             <ArrowLeft className="h-4 w-4" />
-            Вернуться к проекту "{currentProject.name}"
+            К сводке по всем проектам
           </Link>
         )}
         
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              {currentProject ? `Финансы проекта "${currentProject.name}"` : 'Финансы'}
+              {currentProject ? `Финансы: ${currentProject.name}` : 'Финансы'}
             </h1>
-            <p className="text-sm text-gray-600 mt-1">{filteredRecords.length} записей</p>
+            <p className="text-sm text-gray-600 mt-1">
+              {currentProject ? `${filteredRecords.length} записей` : `Сводка по ${projectsForSummary.length} проектам`}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
-              Экспорт
+              Экспорт {currentProject ? 'проекта' : 'всех'}
             </Button>
-            <Button onClick={handleBudgetSettings} variant="outline" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Настройки бюджета
-            </Button>
-            <Button onClick={() => setShowModal(true)} className="flex items-center gap-2">
+            {currentProject && (
+              <Button onClick={handleBudgetSettings} variant="outline" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Настройки бюджета
+              </Button>
+            )}
+            <Button onClick={() => { setShowModal(true); setSubmitError(null) }} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Добавить запись
             </Button>
           </div>
         </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard
-            title="Бюджет"
-            value={new Intl.NumberFormat('ru-RU', {
-              style: 'currency',
-              currency: 'RUB',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            }).format(budgetData.budget)}
-            icon={<DollarSign className="h-5 w-5" />}
-            status="neutral"
-          />
-          <KpiCard
-            title="Потрачено"
-            value={new Intl.NumberFormat('ru-RU', {
-              style: 'currency',
-              currency: 'RUB',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            }).format(budgetData.spent)}
-            change={budgetData.budget > 0 ? Number(((budgetData.spent / budgetData.budget) * 100).toFixed(1)) : 0}
-            changeLabel="от бюджета"
-            icon={<TrendingDown className="h-5 w-5" />}
-            status={budgetData.spent > budgetData.budget ? 'negative' : 'neutral'}
-          />
-          <KpiCard
-            title="Остаток"
-            value={new Intl.NumberFormat('ru-RU', {
-              style: 'currency',
-              currency: 'RUB',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            }).format(budgetData.budget - budgetData.spent)}
-            icon={<Percent className="h-5 w-5" />}
-            status={budgetData.budget - budgetData.spent >= 0 ? 'positive' : 'negative'}
-          />
-          <KpiCard
-            title="Получено"
-            value={new Intl.NumberFormat('ru-RU', {
-              style: 'currency',
-              currency: 'RUB',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            }).format(budgetData.received)}
-            icon={<TrendingUp className="h-5 w-5" />}
-            status="positive"
-          />
-        </div>
+        {/* Режим "все проекты": сводная таблица */}
+        {!currentProject && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiCard title="Всего доход" value={formatMoney(totalIncome)} icon={<TrendingUp className="h-5 w-5" />} status="positive" />
+              <KpiCard title="Всего расход" value={formatMoney(totalExpenses)} icon={<TrendingDown className="h-5 w-5" />} status="negative" />
+              <KpiCard title="Баланс" value={formatMoney(balance)} icon={<DollarSign className="h-5 w-5" />} status={balance >= 0 ? 'positive' : 'negative'} />
+              <KpiCard title="Проектов" value={String(projectsForSummary.length)} icon={<Building2 className="h-5 w-5" />} status="neutral" />
+            </div>
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <div className="p-4 border-b flex flex-wrap items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Поиск по названию проекта..."
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Проект</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Статус</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Бюджет</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Получено</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Потрачено</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Остаток</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Освоение</th>
+                      <th className="px-4 py-3 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {projectsForSummary.map((p) => {
+                      const budget = Number(p.budget) || 0
+                      const received = p.financialSummary?.income ?? 0
+                      const spent = p.financialSummary?.expenses ?? 0
+                      const remainder = budget - spent
+                      const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0
+                      return (
+                        <tr
+                          key={p.id}
+                          className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => setSelectedProject(p.id)}
+                        >
+                          <td className="px-4 py-3">
+                            <span className="font-medium text-gray-900">{p.name}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-0.5 text-xs rounded ${p.status === 'COMPLETED' ? 'bg-gray-100 text-gray-700' : p.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                              {PROJECT_STATUS_LABELS[p.status] || p.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-700">{formatMoney(budget)}</td>
+                          <td className="px-4 py-3 text-right text-sm text-green-600">{formatMoney(received)}</td>
+                          <td className="px-4 py-3 text-right text-sm text-red-600">{formatMoney(spent)}</td>
+                          <td className="px-4 py-3 text-right text-sm font-medium">{remainder >= 0 ? formatMoney(remainder) : `−${formatMoney(-remainder)}`}</td>
+                          <td className="px-4 py-3 text-right text-sm text-gray-600">{budget > 0 ? `${pct}%` : '—'}</td>
+                          <td className="px-4 py-3">
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
 
-        {/* Filters */}
+        {/* Режим "один проект": KPI по проекту */}
+        {currentProject && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard title="Бюджет" value={formatMoney(budgetData.budget)} icon={<DollarSign className="h-5 w-5" />} status="neutral" />
+            <KpiCard title="Потрачено" value={formatMoney(budgetData.spent)} change={budgetData.budget > 0 ? Number(((budgetData.spent / budgetData.budget) * 100).toFixed(1)) : 0} changeLabel="от бюджета" icon={<TrendingDown className="h-5 w-5" />} status={budgetData.spent > budgetData.budget ? 'negative' : 'neutral'} />
+            <KpiCard title="Остаток" value={formatMoney(budgetData.budget - budgetData.spent)} icon={<Percent className="h-5 w-5" />} status={budgetData.budget - budgetData.spent >= 0 ? 'positive' : 'negative'} />
+            <KpiCard title="Получено" value={formatMoney(budgetData.received)} icon={<TrendingUp className="h-5 w-5" />} status="positive" />
+          </div>
+        )}
+
+        {/* Фильтры, освоение, структура, детализация — только при выбранном проекте */}
+        {currentProject && (
+          <>
         <div className="bg-white rounded-lg p-4 border">
           <div className="flex items-center gap-3">
             <Filter className="h-4 w-4 text-gray-400" />
@@ -557,7 +753,6 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {/* Budget Progress & Expense Structure */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BudgetProgressBar
             budget={budgetData.budget}
@@ -565,6 +760,7 @@ export default function FinancePage() {
             spent={budgetData.spent}
             received={budgetData.received}
             projectName={currentProject?.name}
+            projectStatus={currentProject?.status}
           />
           <ExpenseStructureChart
             data={expenseStructure}
@@ -572,10 +768,9 @@ export default function FinancePage() {
           />
         </div>
 
-        {/* Detailed Sections */}
         <Accordion type="multiple" className="w-full">
           <AccordionItem value="categories">
-            <AccordionTrigger>Детализация по статьям</AccordionTrigger>
+            <AccordionTrigger>Детализация по статьям (план/факт по проекту)</AccordionTrigger>
             <AccordionContent>
               <BudgetCategoriesTable 
                 data={categoriesData}
@@ -595,8 +790,28 @@ export default function FinancePage() {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
+          </>
+        )}
 
-        {/* Table */}
+        {/* Итого по показанным записям */}
+        {(() => {
+          const totalShownIncome = filteredRecords.filter(r => r.type === 'INCOME').reduce((s, r) => s + Number(r.amount), 0)
+          const totalShownExpense = filteredRecords.filter(r => r.type === 'EXPENSE').reduce((s, r) => s + Number(r.amount), 0)
+          const shownBalance = totalShownIncome - totalShownExpense
+          return (
+            <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-gray-50 text-sm mb-4">
+              <span className="font-medium text-gray-700">Итого по показанным записям:</span>
+              <span>{filteredRecords.length} записей</span>
+              <span className="text-green-600 font-medium">Доходы: {formatMoney(totalShownIncome)}</span>
+              <span className="text-red-600 font-medium">Расходы: {formatMoney(totalShownExpense)}</span>
+              <span className={`font-semibold ${shownBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                Баланс: {formatMoney(shownBalance)}
+              </span>
+            </div>
+          )
+        })()}
+
+        {/* Таблица записей: при сводке — все с колонкой "Проект", при проекте — только по проекту */}
         <div className="bg-white rounded-lg border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -606,6 +821,8 @@ export default function FinancePage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Категория</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Проект</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Номер счёта</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Контрагент</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Сумма</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
                 </tr>
@@ -644,6 +861,12 @@ export default function FinancePage() {
                         {new Date(record.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                       </div>
                     </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-gray-600">{record.invoiceNumber || '—'}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-gray-600 max-w-[140px] truncate" title={record.counterparty || undefined}>{record.counterparty || '—'}</div>
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <div className={`text-sm font-bold ${
                         record.type === 'INCOME' ? 'text-green-600' : 
@@ -655,8 +878,9 @@ export default function FinancePage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button 
-                        onClick={() => handleDelete(record.id)}
+                        onClick={() => handleDeleteClick(record.id)}
                         className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
+                        title="Удалить"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -724,13 +948,19 @@ export default function FinancePage() {
         {/* Modal */}
         {showModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full">
-              <div className="flex items-center justify-between p-6 border-b">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
                 <h2 className="text-xl font-bold text-gray-900">Добавить финансовую запись</h2>
-                <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded">
+                <button type="button" onClick={() => { setShowModal(false); setSubmitError(null) }} className="p-2 hover:bg-gray-100 rounded">
                   <X className="h-5 w-5" />
                 </button>
               </div>
+
+              {submitError && (
+                <div className="mx-6 mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
+                  {submitError}
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -748,13 +978,28 @@ export default function FinancePage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Категория *</label>
-                    <input
-                      type="text"
-                      value={formData.category}
-                      onChange={(e) => setFormData({...formData, category: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      required
-                    />
+                    {formData.type === 'EXPENSE' && formData.projectId && estimateCategories.length > 0 ? (
+                      <select
+                        value={formData.category}
+                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        required
+                      >
+                        <option value="">Выберите категорию</option>
+                        {estimateCategories.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={formData.category}
+                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Напр. Материалы, Работы"
+                        required
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -783,17 +1028,23 @@ export default function FinancePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Проект</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Проект {formData.type === 'EXPENSE' ? '*' : ''}
+                  </label>
                   <select
                     value={formData.projectId}
                     onChange={(e) => setFormData({...formData, projectId: e.target.value, estimateItemId: ''})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    required={formData.type === 'EXPENSE'}
                   >
-                    <option value="">Без проекта</option>
+                    <option value="">{formData.type === 'EXPENSE' ? 'Выберите проект' : 'Без проекта'}</option>
                     {projects.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
+                  {formData.type === 'EXPENSE' && (
+                    <p className="text-xs text-gray-500 mt-1">Для расхода проект обязателен</p>
+                  )}
                 </div>
 
                 {formData.type === 'EXPENSE' && formData.projectId && estimateItems.length > 0 && (
@@ -801,7 +1052,15 @@ export default function FinancePage() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Позиция сметы (опционально)</label>
                     <select
                       value={formData.estimateItemId}
-                      onChange={(e) => setFormData({...formData, estimateItemId: e.target.value})}
+                      onChange={(e) => {
+                        const itemId = e.target.value
+                        const item = estimateItems.find(i => i.id === itemId)
+                        setFormData({
+                          ...formData,
+                          estimateItemId: itemId,
+                          category: item ? item.category : formData.category
+                        })
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
                       <option value="">Не привязывать</option>
@@ -809,6 +1068,33 @@ export default function FinancePage() {
                         <option key={item.id} value={item.id}>{item.name}</option>
                       ))}
                     </select>
+                    <p className="text-xs text-gray-500 mt-1">При выборе позиции категория подставится из сметы</p>
+                  </div>
+                )}
+
+                {formData.type === 'EXPENSE' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
+                    <p className="sm:col-span-2 text-xs font-medium text-gray-600 mb-1">Для сверки с банком (опционально)</p>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Номер счёта</label>
+                      <input
+                        type="text"
+                        value={formData.invoiceNumber}
+                        onChange={(e) => setFormData({...formData, invoiceNumber: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="Напр. 123 от 01.01.2025"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Контрагент</label>
+                      <input
+                        type="text"
+                        value={formData.counterparty}
+                        onChange={(e) => setFormData({...formData, counterparty: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        placeholder="ИП Иванов, ООО Поставщик"
+                      />
+                    </div>
                   </div>
                 )}
 

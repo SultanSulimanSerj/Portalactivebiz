@@ -463,8 +463,9 @@ model Finance {
   description String?
   amount      Decimal     @db.Decimal(15, 2)
   date        DateTime
-  // Поля для отслеживания оплаты
+  // Поля для отслеживания оплаты и сверки с банком
   invoiceNumber String?    // Номер счёта
+  counterparty  String?    // Контрагент (получатель/плательщик)
   isPaid        Boolean    @default(false)
   paidAt        DateTime?  // Когда оплачен
   paidById      String?    // Кто отметил оплату

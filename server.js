@@ -28,6 +28,10 @@ app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
       const parsedUrl = parse(req.url, true)
+      // Не отдавать /api/socket в Next.js — обрабатывает Socket.IO
+      if (parsedUrl.pathname && parsedUrl.pathname.startsWith('/api/socket')) {
+        return
+      }
       await handle(req, res, parsedUrl)
     } catch (err) {
       console.error('Error occurred handling', req.url, err)

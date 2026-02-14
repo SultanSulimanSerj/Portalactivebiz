@@ -24,8 +24,8 @@ export default function ExpandableDescription({
     : description.substring(0, maxLength) + '...'
   
   return (
-    <div className={`text-sm text-gray-700 ${className}`}>
-      <div className="whitespace-pre-wrap break-words transition-all duration-200 max-w-full overflow-hidden">
+    <div className={`min-w-0 w-full max-w-full overflow-hidden text-sm text-gray-700 ${className}`}>
+      <div className="w-full min-w-0 overflow-x-hidden overflow-y-visible whitespace-pre-wrap break-all transition-all duration-200 rounded-md bg-gray-50/80 px-3 py-2 border border-gray-100" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
         {displayText}
       </div>
       {shouldTruncate && (

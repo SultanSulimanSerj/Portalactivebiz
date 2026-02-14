@@ -13,10 +13,12 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { stageId } = params
 
-    // Проверяем доступ к этапу
     const stage = await prisma.workStage.findFirst({
       where: {
         id: stageId,
@@ -57,6 +59,9 @@ export async function POST(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { stageId } = params
@@ -123,6 +128,9 @@ export async function PATCH(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { stageId } = params
@@ -198,6 +206,9 @@ export async function DELETE(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { stageId } = params

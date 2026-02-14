@@ -64,6 +64,8 @@ interface Document {
   id: string
   title: string
   isPublished: boolean
+  projectId?: string | null
+  project?: { id: string; name: string } | null
 }
 
 interface User {
@@ -81,6 +83,7 @@ export default function ApprovalsPage() {
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string } | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
+  const [projectFilter, setProjectFilter] = useState('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showCommentsModal, setShowCommentsModal] = useState(false)
@@ -106,6 +109,10 @@ export default function ApprovalsPage() {
   const [uploadingCreateFiles, setUploadingCreateFiles] = useState(false)
   const [newComment, setNewComment] = useState('')
   const [commentLoading, setCommentLoading] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<
+    { type: 'deleteApproval'; approvalId: string } | { type: 'deleteAttachment'; approvalId: string; attachmentId: string } | null
+  >(null)
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     fetchCurrentUser()
@@ -114,6 +121,12 @@ export default function ApprovalsPage() {
     fetchDocuments()
     fetchUsers()
   }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const fetchCurrentUser = async () => {
     try {
@@ -249,11 +262,11 @@ export default function ApprovalsPage() {
         }
       } else {
         const error = await response.json()
-        alert(error.error || 'Ошибка при одобрении')
+        setToast({ type: 'error', text: error.error || 'Ошибка при одобрении' })
       }
     } catch (err) {
       console.error(err)
-      alert('Ошибка при одобрении')
+      setToast({ type: 'error', text: 'Ошибка при одобрении' })
     }
   }
 
@@ -277,11 +290,11 @@ export default function ApprovalsPage() {
         }
       } else {
         const error = await response.json()
-        alert(error.error || 'Ошибка при отклонении')
+        setToast({ type: 'error', text: error.error || 'Ошибка при отклонении' })
       }
     } catch (err) {
       console.error(err)
-      alert('Ошибка при отклонении')
+      setToast({ type: 'error', text: 'Ошибка при отклонении' })
     }
   }
 
@@ -310,59 +323,67 @@ export default function ApprovalsPage() {
 
       if (response.ok) {
         await fetchAttachments(approvalId)
-        alert('Файл загружен успешно')
-        // Очищаем input после успешной загрузки
+        setToast({ type: 'success', text: 'Файл загружен успешно' })
         const fileInput = document.getElementById('file-upload') as HTMLInputElement
         if (fileInput) fileInput.value = ''
       } else {
-        alert('Ошибка при загрузке файла')
+        setToast({ type: 'error', text: 'Ошибка при загрузке файла' })
       }
     } catch (error) {
       console.error('Error uploading file:', error)
-      alert('Ошибка при загрузке файла')
+      setToast({ type: 'error', text: 'Ошибка при загрузке файла' })
     } finally {
       setUploadingFile(false)
     }
   }
 
-  const handleDeleteAttachment = async (attachmentId: string, approvalId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этот файл?')) return
+  const handleDeleteAttachmentClick = (attachmentId: string, approvalId: string) => {
+    setConfirmModal({ type: 'deleteAttachment', approvalId, attachmentId })
+  }
 
+  const handleDeleteAttachmentConfirm = async () => {
+    if (!confirmModal || confirmModal.type !== 'deleteAttachment') return
+    const { approvalId, attachmentId } = confirmModal
+    setConfirmModal(null)
     try {
       const response = await fetch(`/api/approvals/${approvalId}/attachments/${attachmentId}`, {
         method: 'DELETE'
       })
-
       if (response.ok) {
         await fetchAttachments(approvalId)
-        alert('Файл удален')
+        setToast({ type: 'success', text: 'Файл удалён' })
       } else {
-        alert('Ошибка при удалении файла')
+        setToast({ type: 'error', text: 'Ошибка при удалении файла' })
       }
     } catch (error) {
       console.error('Error deleting attachment:', error)
-      alert('Ошибка при удалении файла')
+      setToast({ type: 'error', text: 'Ошибка при удалении файла' })
     }
   }
 
-  const handleDeleteApproval = async (approvalId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить это согласование? Это действие необратимо.')) return
+  const handleDeleteApprovalClick = (approvalId: string) => {
+    setConfirmModal({ type: 'deleteApproval', approvalId })
+  }
 
+  const handleDeleteApprovalConfirm = async () => {
+    if (!confirmModal || confirmModal.type !== 'deleteApproval') return
+    const { approvalId } = confirmModal
+    setConfirmModal(null)
     try {
       const response = await fetch(`/api/approvals/${approvalId}`, {
         method: 'DELETE'
       })
-
       if (response.ok) {
         setApprovals(prev => prev.filter(a => a.id !== approvalId))
         setShowDetailsModal(false)
         setSelectedApproval(null)
+        setToast({ type: 'success', text: 'Согласование удалено' })
       } else {
-        alert('Ошибка при удалении согласования')
+        setToast({ type: 'error', text: 'Ошибка при удалении согласования' })
       }
     } catch (error) {
       console.error('Error deleting approval:', error)
-      alert('Ошибка при удалении согласования')
+      setToast({ type: 'error', text: 'Ошибка при удалении согласования' })
     }
   }
 
@@ -488,7 +509,10 @@ export default function ApprovalsPage() {
   const filteredApprovals = approvals.filter(approval => {
     const statusMatch = statusFilter === 'all' || approval.status === statusFilter
     const priorityMatch = priorityFilter === 'all' || approval.priority === priorityFilter
-    return statusMatch && priorityMatch
+    const projectMatch =
+      projectFilter === 'all' ||
+      (projectFilter === 'none' ? !approval.project?.id : approval.project?.id === projectFilter)
+    return statusMatch && priorityMatch && projectMatch
   })
 
   if (loading) {
@@ -506,12 +530,67 @@ export default function ApprovalsPage() {
 
   return (
     <Layout>
+      {/* Тосты */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm animate-in fade-in slide-in-from-right-5 duration-200">
+          <div className={`rounded-xl shadow-lg border p-4 flex items-center gap-3 ${
+            toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {toast.type === 'success' ? (
+              <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+            )}
+            <p className="text-sm font-medium flex-1">{toast.text}</p>
+            <button onClick={() => setToast(null)} className="p-1 hover:opacity-70 shrink-0">×</button>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка подтверждения удаления */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setConfirmModal(null)} aria-hidden />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 p-6 max-w-sm w-full text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              {confirmModal.type === 'deleteApproval' ? 'Удалить согласование?' : 'Удалить файл?'}
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              {confirmModal.type === 'deleteApproval'
+                ? 'Это действие необратимо.'
+                : 'Файл будет удалён без возможности восстановления.'}
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={confirmModal.type === 'deleteApproval' ? handleDeleteApprovalConfirm : handleDeleteAttachmentConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Согласования</h1>
-            <p className="text-sm text-gray-600 mt-1">{approvals.length} согласований</p>
+            <p className="text-sm text-gray-600 mt-1">
+              {filteredApprovals.length === approvals.length
+                ? `${approvals.length} согласований`
+                : `${filteredApprovals.length} из ${approvals.length} согласований`}
+            </p>
           </div>
           <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
@@ -521,7 +600,23 @@ export default function ApprovalsPage() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg p-4 border">
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap items-center">
+            {/* Project Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 shrink-0">Проект:</span>
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="pl-3 pr-8 py-1.5 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[140px]"
+              >
+                <option value="all">Все проекты</option>
+                <option value="none">Без проекта</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Status Filter */}
             <div className="flex gap-2">
               <button
@@ -615,15 +710,13 @@ export default function ApprovalsPage() {
                 ) : (
                   filteredApprovals.map((approval) => (
                     <tr key={approval.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3" style={{ maxWidth: '200px', width: '200px' }}>
-                        <div className="space-y-1">
-                          <div className="text-sm font-semibold text-gray-900 line-clamp-1">{approval.title}</div>
+                      <td className="px-4 py-3" style={{ maxWidth: '260px', width: '260px' }}>
+                        <div className="space-y-1 min-w-0">
+                          <div className="text-sm font-semibold text-gray-900 line-clamp-2 break-words">{approval.title}</div>
                           {approval.description && (
-                            <ExpandableDescription 
-                              description={approval.description} 
-                              maxLength={80}
-                              className="text-xs text-gray-500"
-                            />
+                            <p className="text-xs text-gray-500 line-clamp-2 break-words">
+                              {approval.description.length > 100 ? approval.description.slice(0, 100) + '…' : approval.description}
+                            </p>
                           )}
                           {approval.document && (
                             <div className="text-xs text-blue-600 mt-0.5">
@@ -757,7 +850,7 @@ export default function ApprovalsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteApproval(approval.id)}
+                            onClick={() => handleDeleteApprovalClick(approval.id)}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             title="Удалить согласование"
                           >
@@ -857,7 +950,16 @@ export default function ApprovalsPage() {
                       <select
                         id="project"
                         value={createForm.projectId}
-                        onChange={(e) => setCreateForm({ ...createForm, projectId: e.target.value })}
+                        onChange={(e) => {
+                          const projectId = e.target.value
+                          const currentDoc = documents.find(d => d.id === createForm.documentId)
+                          const docBelongsToProject = currentDoc && (currentDoc.projectId === projectId || currentDoc.project?.id === projectId)
+                          setCreateForm({
+                            ...createForm,
+                            projectId,
+                            documentId: projectId && docBelongsToProject ? createForm.documentId : ''
+                          })
+                        }}
                         className="w-full p-2 border border-gray-300 rounded-md"
                       >
                         <option value="">Выберите проект</option>
@@ -874,11 +976,16 @@ export default function ApprovalsPage() {
                         value={createForm.documentId}
                         onChange={(e) => setCreateForm({ ...createForm, documentId: e.target.value })}
                         className="w-full p-2 border border-gray-300 rounded-md"
+                        disabled={!createForm.projectId}
                       >
-                        <option value="">Выберите документ</option>
-                        {documents.map(doc => (
-                          <option key={doc.id} value={doc.id}>{doc.title}</option>
-                        ))}
+                        <option value="">
+                          {createForm.projectId ? 'Выберите документ проекта' : 'Сначала выберите проект'}
+                        </option>
+                        {documents
+                          .filter(doc => (doc.projectId ?? doc.project?.id) === createForm.projectId)
+                          .map(doc => (
+                            <option key={doc.id} value={doc.id}>{doc.title}</option>
+                          ))}
                       </select>
                     </div>
                   </div>
@@ -1019,25 +1126,25 @@ export default function ApprovalsPage() {
 
         {/* Approval Details Modal */}
         {showDetailsModal && selectedApproval && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <CardHeader>
-                <CardTitle>{selectedApproval.title}</CardTitle>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden min-w-0">
+              <CardHeader className="min-w-0">
+                <CardTitle className="break-words">{selectedApproval.title}</CardTitle>
                 <CardDescription>
                   Детали согласования
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
+              <CardContent className="space-y-4 min-w-0 overflow-x-hidden">
+                <div className="min-w-0 w-full overflow-hidden">
                   <Label>Описание</Label>
                   {selectedApproval.description ? (
                     <ExpandableDescription 
                       description={selectedApproval.description} 
                       maxLength={200}
-                      className="text-sm"
+                      className="mt-1 text-sm"
                     />
                   ) : (
-                    <p className="text-sm text-gray-500">Нет описания</p>
+                    <p className="text-sm text-gray-500 mt-1">Нет описания</p>
                   )}
                 </div>
 
@@ -1087,21 +1194,30 @@ export default function ApprovalsPage() {
                     {attachments.length > 0 ? (
                       attachments.map((attachment) => (
                         <div key={attachment.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                          <div className="flex items-center gap-2">
-                            <Paperclip className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm">{attachment.fileName}</span>
-                            <span className="text-xs text-gray-500">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Paperclip className="h-4 w-4 text-gray-500 shrink-0" />
+                            <span className="text-sm truncate">{attachment.fileName}</span>
+                            <span className="text-xs text-gray-500 shrink-0">
                               ({(attachment.fileSize / 1024).toFixed(1)} KB)
                             </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs text-gray-500 hidden sm:inline">
                               {new Date(attachment.createdAt).toLocaleDateString('ru-RU')}
                             </span>
                             <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => window.open(`/api/approvals/${selectedApproval.id}/attachments/${attachment.id}/download`, '_blank')}
+                              title="Открыть / Скачать"
+                            >
+                              Открыть
+                            </Button>
+                            <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDeleteAttachment(attachment.id, selectedApproval.id)}
+                              onClick={() => handleDeleteAttachmentClick(attachment.id, selectedApproval.id)}
                               className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
                               title="Удалить файл"
                             >
@@ -1178,7 +1294,7 @@ export default function ApprovalsPage() {
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => handleDeleteApproval(selectedApproval.id)}
+                      onClick={() => handleDeleteApprovalClick(selectedApproval.id)}
                       className="text-red-600 border-red-600 hover:bg-red-50"
                     >
                       <Trash2 className="h-4 w-4 mr-2" />

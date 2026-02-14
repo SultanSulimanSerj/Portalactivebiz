@@ -40,6 +40,15 @@ interface Estimate {
   isEditing?: boolean
 }
 
+/** Актуальные ставки НДС */
+const VAT_RATES_RU = [
+  { value: 0, label: '0% — без НДС / экспорт' },
+  { value: 5, label: '5%' },
+  { value: 7, label: '7%' },
+  { value: 10, label: '10%' },
+  { value: 22, label: '22%' }
+] as const
+
 interface ProjectInfo {
   id: string
   name: string
@@ -422,9 +431,11 @@ export default function EstimatePage() {
       })
 
       if (response.ok) {
+        const updated = await response.json()
+        const recalc = recalculateEstimate(updated)
+        setEstimates(prev => prev.map(e => e.id === recalc.id ? recalc : e))
+        setActiveEstimate(recalc)
         setHasUnsavedChanges(false)
-        // Показать уведомление об успешном сохранении
-        console.log('Смета сохранена')
       }
     } catch (error) {
       console.error('Error saving estimate:', error)
@@ -1064,11 +1075,11 @@ export default function EstimatePage() {
                             <select
                               value={activeEstimate.vatRate}
                               onChange={(e) => updateVatRate(Number(e.target.value))}
-                              className="px-4 py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              className="px-4 py-2 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[280px]"
                             >
-                              <option value={0}>0%</option>
-                              <option value={10}>10%</option>
-                              <option value={20}>20%</option>
+                              {VAT_RATES_RU.map(({ value, label }) => (
+                                <option key={value} value={value}>{label}</option>
+                              ))}
                             </select>
                           </div>
                         )}

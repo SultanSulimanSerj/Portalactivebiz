@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
 import { generateId } from '@/lib/id-generator'
-import { saveOptimizedImage, getImageUrl } from '@/lib/image-optimization'
-import { getCDNUrl } from '@/lib/cdn'
+import { uploadFile } from '@/lib/storage'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,43 +26,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    // Generate unique filename
-    const fileExtension = file.name.split('.').pop()
-    const uniqueFilename = `${generateId()}.${fileExtension}`
-    
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'uploads')
-    try {
-      await mkdir(uploadsDir, { recursive: true })
-    } catch (error) {
-      // Directory might already exist
-    }
+    // Generate unique filename and MinIO storage key
+    const docId = generateId()
+    const fileExtension = file.name.split('.').pop() || 'bin'
+    const uniqueFilename = `${docId}.${fileExtension}`
+    const storageKey = `documents/${user.companyId}/${uniqueFilename}`
 
-    // Check if file is an image
-    const isImage = file.type.startsWith('image/')
-    
-    let filePath: string
-    let optimizedPath: string | null = null
-    let thumbnailPath: string | null = null
-
-    if (isImage) {
-      // Optimize image
-      const result = await saveOptimizedImage(file, uploadsDir, uniqueFilename, {
-        width: 1200,
-        height: 800,
-        quality: 85,
-        format: 'webp'
-      })
-      filePath = result.originalPath
-      optimizedPath = result.optimizedPath
-      thumbnailPath = result.thumbnailPath
-    } else {
-      // Save regular file
-      const bytes = await file.arrayBuffer()
-      const buffer = Buffer.from(bytes)
-      filePath = join(uploadsDir, uniqueFilename)
-      await writeFile(filePath, buffer)
-    }
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+    await uploadFile(storageKey, buffer, file.type)
 
     // Generate document number
     const documentCount = await prisma.document.count()
@@ -74,27 +43,19 @@ export async function POST(request: NextRequest) {
     // Create document record
     const document = await prisma.document.create({
       data: {
-        id: generateId(),
+        id: docId,
         title,
         description: description || null,
         fileName: file.name,
-        filePath: uniqueFilename,
+        filePath: storageKey,
         fileSize: file.size,
         mimeType: file.type,
         version: 1,
         documentNumber,
         creatorId: user.id,
+        companyId: user.companyId || null,
         projectId: projectId || null,
-        updatedAt: new Date(),
-        // Store optimization metadata
-        ...(isImage && {
-          metadata: {
-            optimizedPath,
-            thumbnailPath,
-            isImage: true,
-            cdnUrl: getCDNUrl(uniqueFilename)
-          }
-        })
+        updatedAt: new Date()
       },
       include: {
         creator: {

@@ -1,13 +1,14 @@
 /**
  * Invoices and Payments Table component
- * Shows invoices, payments and their statuses
+ * Счета (поступления) и платежи (расходы) по проекту
  */
 
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Plus, FileText, CreditCard, Check, Loader2 } from "lucide-react"
+import { Plus, FileText, CreditCard, Check, Loader2, Info } from "lucide-react"
 
 interface InvoiceData {
   id: string
@@ -15,12 +16,14 @@ interface InvoiceData {
   type: 'invoice' | 'payment'
   amount: number
   dueDate: string
+  date?: string
   isPaid: boolean
   paidAt: string | null
   paidBy: { id: string; name: string } | null
   status: 'paid' | 'pending' | 'overdue'
   description?: string
   category?: string
+  counterparty?: string | null
 }
 
 interface InvoicesTableProps {
@@ -76,12 +79,21 @@ export function InvoicesTable({ data, onCreateInvoice, onCreatePayment, onMarkAs
     }
   }
 
+  const totalInvoices = data.filter(i => i.type === 'invoice').reduce((s, i) => s + i.amount, 0)
+  const totalPayments = data.filter(i => i.type === 'payment').reduce((s, i) => s + i.amount, 0)
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Счета и платежи</CardTitle>
-          <div className="flex gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Счета и платежи</CardTitle>
+            <CardDescription className="mt-1 flex items-center gap-1.5 text-sm">
+              <Info className="h-4 w-4 shrink-0" />
+              Счета — ожидаемые/фактические поступления. Платежи — фактические расходы. Дата операции — когда проведена запись.
+            </CardDescription>
+          </div>
+          <div className="flex gap-2 shrink-0">
             {onCreateInvoice && (
               <Button onClick={onCreateInvoice} size="sm" variant="outline" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
@@ -98,6 +110,15 @@ export function InvoicesTable({ data, onCreateInvoice, onCreatePayment, onMarkAs
         </div>
       </CardHeader>
       <CardContent>
+        {data.length > 0 && (
+          <div className="flex flex-wrap gap-4 mb-4 p-3 rounded-lg bg-gray-50 border text-sm">
+            <span className="font-medium text-gray-700">Всего поступлений (счета):</span>
+            <span className="text-green-600 font-semibold">{formatCurrency(totalInvoices)}</span>
+            <span className="text-gray-400">|</span>
+            <span className="font-medium text-gray-700">Всего платежей:</span>
+            <span className="text-red-600 font-semibold">{formatCurrency(totalPayments)}</span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -105,7 +126,9 @@ export function InvoicesTable({ data, onCreateInvoice, onCreatePayment, onMarkAs
                 <th className="text-left py-3 px-4 font-medium text-gray-600">№</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-600">Тип</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-600">Описание</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-600">Контрагент</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-600">Сумма</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-600">Дата операции</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-600">Срок</th>
                 <th className="text-center py-3 px-4 font-medium text-gray-600">Статус</th>
                 {onMarkAsPaid && (
@@ -128,7 +151,13 @@ export function InvoicesTable({ data, onCreateInvoice, onCreatePayment, onMarkAs
                   <td className="py-3 px-4 text-gray-600 max-w-[200px] truncate">
                     {item.description || item.category || '—'}
                   </td>
+                  <td className="py-3 px-4 text-gray-600 max-w-[140px] truncate" title={item.counterparty || undefined}>
+                    {item.counterparty || '—'}
+                  </td>
                   <td className="py-3 px-4 text-right font-medium">{formatCurrency(item.amount)}</td>
+                  <td className="py-3 px-4 text-right text-gray-700">
+                    {item.date ? formatDate(item.date) : '—'}
+                  </td>
                   <td className="py-3 px-4 text-right">{formatDate(item.dueDate)}</td>
                   <td className="py-3 px-4 text-center">
                     <div className="flex flex-col items-center gap-1">

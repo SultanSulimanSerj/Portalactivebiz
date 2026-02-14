@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
             }
           },
           include: {
-            project: { select: { id: true, name: true, managerId: true } },
+            project: { select: { id: true, name: true, creatorId: true } },
             responsible: { select: { id: true, name: true } }
           }
         })
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
             plannedEnd: { lt: new Date() }
           },
           include: {
-            project: { select: { id: true, name: true, managerId: true } },
+            project: { select: { id: true, name: true, creatorId: true } },
             responsible: { select: { id: true, name: true } }
           }
         })
@@ -152,10 +152,10 @@ export async function POST(request: NextRequest) {
           }
 
           // Уведомляем руководителя проекта
-          if (settings.overdueNotifyManager && stage.project.managerId && stage.project.managerId !== stage.responsibleId) {
+          if (settings.overdueNotifyManager && stage.project.creatorId && stage.project.creatorId !== stage.responsibleId) {
             const existingNotification = await prisma.notification.findFirst({
               where: {
-                userId: stage.project.managerId,
+                userId: stage.project.creatorId,
                 type: 'DEADLINE_OVERDUE',
                 actionType: 'stage',
                 actionId: stage.id,
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
                   actionType: 'stage',
                   actionId: stage.id,
                   projectId: stage.projectId,
-                  userId: stage.project.managerId,
+                  userId: stage.project.creatorId,
                   companyId: company.id
                 }
               })
@@ -190,19 +190,19 @@ export async function POST(request: NextRequest) {
         const projects = await prisma.project.findMany({
           where: {
             companyId: company.id,
-            status: { in: ['PLANNING', 'IN_PROGRESS'] },
+            status: { in: ['PLANNING', 'ACTIVE'] },
             budget: { not: null }
           },
           include: {
             finances: {
               where: { type: 'EXPENSE' }
             },
-            manager: { select: { id: true, name: true } }
+            creator: { select: { id: true, name: true } }
           }
         })
 
         for (const project of projects) {
-          if (!project.budget || !project.managerId) continue
+          if (!project.budget || !project.creatorId) continue
 
           const totalExpenses = project.finances.reduce(
             (sum, f) => sum + Number(f.amount), 
@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
           if (budgetUsedPercent >= settings.budgetWarningPercent) {
             const existingNotification = await prisma.notification.findFirst({
               where: {
-                userId: project.managerId,
+                userId: project.creatorId,
                 type: 'BUDGET_WARNING',
                 actionType: 'project',
                 actionId: project.id,
@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
                   actionType: 'project',
                   actionId: project.id,
                   projectId: project.id,
-                  userId: project.managerId,
+                  userId: project.creatorId,
                   companyId: company.id
                 }
               })
@@ -253,19 +253,19 @@ export async function POST(request: NextRequest) {
             date: { lt: new Date() } // Дата (срок оплаты) прошла
           },
           include: {
-            project: { select: { id: true, name: true, managerId: true } },
+            project: { select: { id: true, name: true, creatorId: true } },
             creator: { select: { id: true, name: true } }
           }
         })
 
         for (const invoice of overdueInvoices) {
-          if (!invoice.project?.managerId) continue
+          if (!invoice.project?.creatorId) continue
 
           const daysOverdue = Math.ceil((Date.now() - new Date(invoice.date).getTime()) / (1000 * 60 * 60 * 24))
 
           const existingNotification = await prisma.notification.findFirst({
             where: {
-              userId: invoice.project.managerId,
+              userId: invoice.project.creatorId,
               type: 'INVOICE_OVERDUE',
               actionType: 'finance',
               actionId: invoice.id,
@@ -285,7 +285,7 @@ export async function POST(request: NextRequest) {
                 actionType: 'finance',
                 actionId: invoice.id,
                 projectId: invoice.projectId,
-                userId: invoice.project.managerId,
+                userId: invoice.project.creatorId,
                 companyId: company.id
               }
             })

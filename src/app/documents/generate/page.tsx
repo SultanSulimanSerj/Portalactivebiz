@@ -24,6 +24,8 @@ export default function GenerateDocumentPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([])
   const [loading, setLoading] = useState(false)
   const [projectName, setProjectName] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (projectId) {
@@ -61,10 +63,11 @@ export default function GenerateDocumentPage() {
 
   const handleGenerate = async () => {
     if (!projectId || !selectedDocType) {
-      alert('Выберите тип документа')
+      setErrorMessage('Выберите тип документа')
       return
     }
-
+    setErrorMessage(null)
+    setShowSuccess(false)
     setLoading(true)
     try {
       const response = await fetch('/api/documents/generate', {
@@ -84,9 +87,6 @@ export default function GenerateDocumentPage() {
         throw new Error(error.error || 'Ошибка при генерации документа')
       }
 
-      // Получаем ID документа из заголовка
-      const documentId = response.headers.get('X-Document-Id')
-
       // Получаем blob и скачиваем файл
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
@@ -98,10 +98,11 @@ export default function GenerateDocumentPage() {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
 
-      alert('✅ Документ успешно сгенерирован и сохранен в проекте!\n\nВы можете найти его во вкладке "Документы" проекта.')
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 4000)
     } catch (error) {
       console.error('Error generating document:', error)
-      alert(error instanceof Error ? error.message : 'Ошибка при генерации документа')
+      setErrorMessage(error instanceof Error ? error.message : 'Ошибка при генерации документа')
     } finally {
       setLoading(false)
     }
@@ -134,8 +135,47 @@ export default function GenerateDocumentPage() {
 
   return (
     <Layout>
+      {/* Маленькое окошко успеха */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/20"
+            onClick={() => setShowSuccess(false)}
+            aria-hidden
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-green-100 p-6 max-w-sm w-full flex flex-col items-center text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mb-4">
+              <CheckCircle className="w-8 h-8 text-green-600" strokeWidth={2.5} />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Документ сгенерирован</h3>
+            <p className="text-sm text-gray-600 mb-5">
+              Сохранён в проекте. Файл скачан, найти его можно во вкладке «Документы».
+            </p>
+            <button
+              onClick={() => setShowSuccess(false)}
+              className="px-4 py-2 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="p-8">
         <div className="max-w-6xl mx-auto">
+          {/* Ошибка */}
+          {errorMessage && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-800 text-sm">
+              <span className="shrink-0">⚠️</span>
+              <span>{errorMessage}</span>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="ml-auto text-red-600 hover:underline shrink-0"
+              >
+                Скрыть
+              </button>
+            </div>
+          )}
           {/* Header */}
           <div className="flex items-center gap-4 mb-6">
             <button

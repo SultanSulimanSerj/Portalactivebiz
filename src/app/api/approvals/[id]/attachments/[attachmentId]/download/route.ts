@@ -16,16 +16,22 @@ export async function GET(
 
     const { id: approvalId, attachmentId } = params
 
-    // Проверяем, что согласование принадлежит компании пользователя
-    const approval = await prisma.approval.findFirst({
-      where: {
-        id: approvalId,
-        creatorId: user.id
+    // Доступ: создатель согласования или участник (assignee)
+    const approval = await prisma.approval.findUnique({
+      where: { id: approvalId },
+      include: {
+        assignments: { select: { userId: true } }
       }
     })
 
     if (!approval) {
       return NextResponse.json({ error: 'Approval not found' }, { status: 404 })
+    }
+
+    const isCreator = approval.creatorId === user.id
+    const isAssignee = approval.assignments.some(a => a.userId === user.id)
+    if (!isCreator && !isAssignee) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Получаем информацию о файле

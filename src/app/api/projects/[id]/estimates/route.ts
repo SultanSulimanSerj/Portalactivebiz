@@ -91,7 +91,7 @@ export async function POST(
         totalCost: 0,
         profit: 0,
         vatEnabled: false,
-        vatRate: 20,
+        vatRate: 22,
         vatAmount: 0,
         totalWithVat: 0
       },

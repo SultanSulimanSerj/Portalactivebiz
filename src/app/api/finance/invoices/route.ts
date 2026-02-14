@@ -30,65 +30,101 @@ export async function GET(request: NextRequest) {
       where.projectId = projectId
     }
 
-    // Получаем данные о финансах, которые могут быть счетами или платежами
-    const finances = await prisma.finance.findMany({
-      where: {
-        ...where,
-        type: {
-          in: ['INCOME', 'EXPENSE']
-        }
-      },
-      select: {
-        id: true,
-        type: true,
-        amount: true,
-        date: true,
-        description: true,
-        category: true,
-        invoiceNumber: true,
-        isPaid: true,
-        paidAt: true,
-        paidBy: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      },
-      orderBy: { date: 'desc' }
-    })
+    // Получаем данные о финансах (счета и платежи)
+    type FinanceRow = {
+      id: string
+      type: string
+      amount: unknown
+      date: Date
+      description: string | null
+      category: string
+      invoiceNumber: string | null
+      counterparty?: string | null
+      isPaid: boolean
+      paidAt: Date | null
+      paidBy: { id: string; name: string } | null
+    }
 
-    // Преобразуем данные в формат счетов и платежей
+    let finances: FinanceRow[]
+    try {
+      finances = await prisma.finance.findMany({
+        where: {
+          ...where,
+          type: {
+            in: ['INCOME', 'EXPENSE']
+          }
+        },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          date: true,
+          description: true,
+          category: true,
+          invoiceNumber: true,
+          counterparty: true,
+          isPaid: true,
+          paidAt: true,
+          paidBy: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: { date: 'desc' }
+      }) as FinanceRow[]
+    } catch (selectErr) {
+      // Если колонка counterparty ещё не создана — запрашиваем без неё
+      await logger.error('Error fetching finances (with counterparty), retrying without', { error: selectErr instanceof Error ? selectErr.message : 'Unknown' })
+      finances = await prisma.finance.findMany({
+        where: {
+          ...where,
+          type: { in: ['INCOME', 'EXPENSE'] }
+        },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          date: true,
+          description: true,
+          category: true,
+          invoiceNumber: true,
+          isPaid: true,
+          paidAt: true,
+          paidBy: { select: { id: true, name: true } }
+        },
+        orderBy: { date: 'desc' }
+      }) as FinanceRow[]
+      finances = finances.map((f) => ({ ...f, counterparty: null }))
+    }
+
     const invoicesData = finances.map((finance, index) => {
       const isIncome = finance.type === 'INCOME'
       const dueDate = new Date(finance.date)
-      dueDate.setDate(dueDate.getDate() + 30) // Добавляем 30 дней к дате
+      dueDate.setDate(dueDate.getDate() + 30)
 
-      // Определяем статус на основе реальных данных из БД
       const now = new Date()
       const isOverdue = dueDate < now && !finance.isPaid
-
       let status: 'paid' | 'pending' | 'overdue'
-      if (finance.isPaid) {
-        status = 'paid'
-      } else if (isOverdue) {
-        status = 'overdue'
-      } else {
-        status = 'pending'
-      }
+      if (finance.isPaid) status = 'paid'
+      else if (isOverdue) status = 'overdue'
+      else status = 'pending'
 
       return {
         id: finance.id,
         number: finance.invoiceNumber || `${isIncome ? 'СЧ' : 'ПЛ'}-${String(index + 1).padStart(3, '0')}`,
-        type: isIncome ? 'invoice' as const : 'payment' as const,
+        type: (isIncome ? 'invoice' : 'payment') as const,
         amount: Number(finance.amount),
+        date: finance.date.toISOString().split('T')[0],
         dueDate: dueDate.toISOString().split('T')[0],
         isPaid: finance.isPaid,
         paidAt: finance.paidAt?.toISOString() || null,
         paidBy: finance.paidBy ? { id: finance.paidBy.id, name: finance.paidBy.name } : null,
         status,
         description: finance.description,
-        category: finance.category
+        category: finance.category,
+        counterparty: finance.counterparty ?? null
       }
     })
 

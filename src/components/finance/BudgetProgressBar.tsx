@@ -12,6 +12,7 @@ interface BudgetProgressBarProps {
   spent: number
   received: number
   projectName?: string
+  projectStatus?: string
 }
 
 export function BudgetProgressBar({ 
@@ -19,7 +20,8 @@ export function BudgetProgressBar({
   estimateTotal, 
   spent, 
   received,
-  projectName 
+  projectName,
+  projectStatus 
 }: BudgetProgressBarProps) {
   const formatCurrency = (value: number) => {
     if (value >= 1000000) {
@@ -42,25 +44,29 @@ export function BudgetProgressBar({
 
   const isOverBudget = spent > budget
   const isNearLimit = spentPercentage >= 80 && !isOverBudget
+  const isCompleted = projectStatus === 'COMPLETED'
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between">
+        <CardTitle className="flex items-center justify-between flex-wrap gap-2">
           <span>Освоение бюджета</span>
-          {isOverBudget && (
+          {isCompleted && (
+            <span className="text-sm font-normal text-gray-600">Проект завершён</span>
+          )}
+          {!isCompleted && isOverBudget && (
             <span className="flex items-center gap-1 text-sm font-normal text-red-600">
               <AlertTriangle className="h-4 w-4" />
               Перерасход
             </span>
           )}
-          {isNearLimit && (
+          {!isCompleted && isNearLimit && (
             <span className="flex items-center gap-1 text-sm font-normal text-amber-600">
               <AlertTriangle className="h-4 w-4" />
               Близко к лимиту
             </span>
           )}
-          {!isOverBudget && !isNearLimit && spentPercentage > 0 && (
+          {!isCompleted && !isOverBudget && !isNearLimit && spentPercentage > 0 && (
             <span className="flex items-center gap-1 text-sm font-normal text-green-600">
               <CheckCircle2 className="h-4 w-4" />
               В норме
@@ -88,7 +94,9 @@ export function BudgetProgressBar({
           <div className="flex items-center justify-between mt-1">
             <span className="text-xs text-gray-500">{spentPercentage.toFixed(1)}% освоено</span>
             <span className={`text-xs font-medium ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {remaining >= 0 ? `Остаток: ${formatCurrency(remaining)}` : `Перерасход: ${formatCurrency(Math.abs(remaining))}`}
+              {isCompleted
+                ? (remaining >= 0 ? `Итог: остаток ${formatCurrency(remaining)}` : `Итог: перерасход ${formatCurrency(Math.abs(remaining))}`)
+                : (remaining >= 0 ? `Остаток: ${formatCurrency(remaining)}` : `Перерасход: ${formatCurrency(Math.abs(remaining))}`)}
             </span>
           </div>
         </div>

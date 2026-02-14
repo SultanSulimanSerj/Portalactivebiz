@@ -100,7 +100,7 @@ export function getTemplateData(project: any, company: any, estimate: any) {
       total: estimate?.total ? Number(estimate.total).toLocaleString('ru-RU') : '',
       totalWithVat: estimate?.totalWithVat ? Number(estimate.totalWithVat).toLocaleString('ru-RU') : '',
       vatAmount: estimate?.vatAmount ? Number(estimate.vatAmount).toLocaleString('ru-RU') : '',
-      vatRate: estimate?.vatRate ? Number(estimate.vatRate) : '20',
+      vatRate: estimate?.vatRate ? Number(estimate.vatRate) : '22',
       vatEnabled: estimate?.vatEnabled ? 'включая НДС' : 'НДС не облагается согласно п. 3 ст. 346.11 гл. 26.2 НК РФ'
     }
   }

@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
-import { writeFile, unlink, mkdir } from 'fs/promises'
 import path from 'path'
-
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'stages')
+import { uploadFile, getSignedUrl, deleteFile } from '@/lib/storage'
 
 // GET - получить фото этапа
 export async function GET(
@@ -17,10 +15,12 @@ export async function GET(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { stageId } = params
 
-    // Проверяем доступ к этапу
     const stage = await prisma.workStage.findFirst({
       where: {
         id: stageId,
@@ -34,7 +34,6 @@ export async function GET(
       return NextResponse.json({ error: 'Этап не найден' }, { status: 404 })
     }
 
-    // Получаем фото
     const photos = await prisma.stagePhoto.findMany({
       where: { stageId },
       include: {
@@ -45,11 +44,14 @@ export async function GET(
       orderBy: { createdAt: 'desc' }
     })
 
-    // Добавляем URL к каждому фото
-    const photosWithUrls = photos.map(photo => ({
-      ...photo,
-      url: `/uploads/stages/${photo.filename}`
-    }))
+    const storageKeyPrefix = `stages/${stageId}/`
+    const photosWithUrls = await Promise.all(
+      photos.map(async (photo) => {
+        const storageKey = `${storageKeyPrefix}${photo.filename}`
+        const url = await getSignedUrl(storageKey, 3600)
+        return { ...photo, url }
+      })
+    )
 
     return NextResponse.json(photosWithUrls)
   } catch (error) {
@@ -68,10 +70,12 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { stageId } = params
 
-    // Проверяем доступ к этапу
     const stage = await prisma.workStage.findFirst({
       where: {
         id: stageId,
@@ -85,7 +89,6 @@ export async function POST(
       return NextResponse.json({ error: 'Этап не найден' }, { status: 404 })
     }
 
-    // Получаем файл из формы
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const description = formData.get('description') as string | null
@@ -106,19 +109,14 @@ export async function POST(
       return NextResponse.json({ error: 'Файл слишком большой. Максимум 10 МБ' }, { status: 400 })
     }
 
-    // Создаём уникальное имя файла
     const ext = path.extname(file.name) || '.jpg'
     const filename = `${stageId}_${Date.now()}_${generateId()}${ext}`
+    const storageKey = `stages/${stageId}/${filename}`
 
-    // Убеждаемся, что директория существует
-    await mkdir(UPLOAD_DIR, { recursive: true })
-
-    // Сохраняем файл
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    await writeFile(path.join(UPLOAD_DIR, filename), buffer)
+    await uploadFile(storageKey, buffer, file.type)
 
-    // Создаём запись в БД
     const photo = await prisma.stagePhoto.create({
       data: {
         id: generateId(),
@@ -137,9 +135,10 @@ export async function POST(
       }
     })
 
+    const url = await getSignedUrl(storageKey, 3600)
     return NextResponse.json({
       ...photo,
-      url: `/uploads/stages/${filename}`
+      url
     }, { status: 201 })
   } catch (error) {
     console.error('Error uploading photo:', error)
@@ -156,6 +155,9 @@ export async function DELETE(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { stageId } = params
@@ -183,15 +185,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Фото не найдено' }, { status: 404 })
     }
 
-    // Удаляем файл с диска
+    const storageKey = `stages/${stageId}/${photo.filename}`
     try {
-      await unlink(path.join(UPLOAD_DIR, photo.filename))
+      await deleteFile(storageKey)
     } catch (e) {
-      console.error('Error deleting file:', e)
-      // Продолжаем удаление из БД даже если файл не найден
+      console.error('Error deleting file from MinIO:', e)
     }
 
-    // Удаляем запись из БД
     await prisma.stagePhoto.delete({
       where: { id: photoId }
     })

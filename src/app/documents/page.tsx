@@ -31,6 +31,8 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [formData, setFormData] = useState({
     title: '',
@@ -120,33 +122,42 @@ export default function DocumentsPage() {
   }
 
   const handleDownload = async (documentId: string, fileName: string) => {
+    setErrorMessage(null)
     try {
       const response = await fetch(`/api/documents/${documentId}/download`)
       if (response.ok) {
-        // Если ответ - редирект, браузер автоматически перейдет по URL
         window.open(`/api/documents/${documentId}/download`, '_blank')
       } else {
-        alert('Ошибка при скачивании файла')
+        setErrorMessage('Ошибка при скачивании файла')
       }
     } catch (error) {
       console.error('Download error:', error)
-      alert('Ошибка при скачивании файла')
+      setErrorMessage('Ошибка при скачивании файла')
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Удалить документ?')) return
+  const handleDeleteClick = (id: string) => {
+    setDeleteConfirmId(id)
+  }
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return
+    setErrorMessage(null)
     try {
-      const response = await fetch(`/api/documents/${id}`, {
+      const response = await fetch(`/api/documents/${deleteConfirmId}`, {
         method: 'DELETE',
       })
-
       if (response.ok) {
         fetchDocuments()
+        setDeleteConfirmId(null)
+      } else {
+        setErrorMessage('Ошибка при удалении документа')
       }
     } catch (err) {
       console.error(err)
+      setErrorMessage('Ошибка при удалении документа')
+    } finally {
+      setDeleteConfirmId(null)
     }
   }
 
@@ -196,6 +207,43 @@ export default function DocumentsPage() {
 
   return (
     <Layout>
+      {/* Ошибка */}
+      {errorMessage && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-800 text-sm">
+          <span className="shrink-0">⚠️</span>
+          <span>{errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="ml-auto text-red-600 hover:underline shrink-0">Скрыть</button>
+        </div>
+      )}
+
+      {/* Подтверждение удаления документа */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setDeleteConfirmId(null)} aria-hidden />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 p-6 max-w-sm w-full text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Удалить документ?</h3>
+            <p className="text-sm text-gray-600 mb-6">Документ будет удалён без возможности восстановления.</p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Header */}
         {currentProject && (
@@ -302,7 +350,7 @@ export default function DocumentsPage() {
                           <Download className="h-4 w-4" />
                         </button>
                         <button 
-                          onClick={() => handleDelete(doc.id)}
+                          onClick={() => handleDeleteClick(doc.id)}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" 
                           title="Удалить"
                         >

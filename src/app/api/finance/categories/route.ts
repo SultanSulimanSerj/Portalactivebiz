@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 1. Получаем ПЛАН из сметы (EstimateItem по категориям)
+    // 1. Получаем ПЛАН по расходам из сметы: себестоимость по категориям (quantity × costPrice)
     const estimateItemsWhere: any = {
       estimate: {
         project: {
@@ -46,7 +46,8 @@ export async function GET(request: NextRequest) {
       where: estimateItemsWhere,
       select: {
         category: true,
-        total: true
+        quantity: true,
+        costPrice: true
       }
     })
 
@@ -71,14 +72,14 @@ export async function GET(request: NextRequest) {
     // Группируем данные по категориям
     const categoryData: { [key: string]: { plan: number, fact: number } } = {}
 
-    // План из сметы
+    // План по расходам: себестоимость по смете (quantity × costPrice) по категориям
     estimateItems.forEach(item => {
       const category = item.category || 'Без категории'
-      
+      const costTotal = Number(item.quantity) * Number(item.costPrice)
       if (!categoryData[category]) {
         categoryData[category] = { plan: 0, fact: 0 }
       }
-      categoryData[category].plan += Number(item.total)
+      categoryData[category].plan += costTotal
     })
 
     // Факт из расходов

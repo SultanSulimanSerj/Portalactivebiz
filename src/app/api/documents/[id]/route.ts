@@ -3,6 +3,11 @@ import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { deleteFile } from '@/lib/storage'
+
+function isMinIOKey(filePath: string): boolean {
+  return filePath.startsWith('documents/') || filePath.startsWith('stages/') || filePath.startsWith('approvals/')
+}
 
 export async function DELETE(
   request: NextRequest,
@@ -13,27 +18,40 @@ export async function DELETE(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-    // Get document to find file path
-    const document = await prisma.document.findUnique({
-      where: { id: params.id }
+    const document = await prisma.document.findFirst({
+      where: {
+        id: params.id,
+        OR: [
+          { companyId: user.companyId },
+          { companyId: null, creator: { companyId: user.companyId } }
+        ]
+      }
     })
 
     if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    // Delete file from filesystem
-    try {
-      const uploadsDir = path.join(process.cwd(), 'uploads')
-      const filePath = path.join(uploadsDir, document.filePath)
-      await fs.unlink(filePath)
-    } catch (fileError) {
-      console.error('Error deleting file:', fileError)
-      // Continue even if file deletion fails
+    if (isMinIOKey(document.filePath)) {
+      try {
+        await deleteFile(document.filePath)
+      } catch (fileError) {
+        console.error('Error deleting file from MinIO:', fileError)
+      }
+    } else {
+      try {
+        const uploadsDir = path.join(process.cwd(), 'uploads')
+        const filePath = path.join(uploadsDir, document.filePath)
+        await fs.unlink(filePath)
+      } catch (fileError) {
+        console.error('Error deleting file:', fileError)
+      }
     }
 
-    // Delete document from database
     await prisma.document.delete({
       where: { id: params.id }
     })

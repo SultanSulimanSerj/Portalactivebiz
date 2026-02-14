@@ -128,7 +128,7 @@ export async function PUT(
       }
 
       const profit = total - totalCost
-      const vatAmount = vatEnabled ? (total * Number(vatRate || 20) / 100) : 0
+      const vatAmount = vatEnabled ? (total * Number(vatRate || 22) / 100) : 0
       const totalWithVat = total + vatAmount
 
       // Обновляем смету
@@ -141,7 +141,7 @@ export async function PUT(
           totalCost,
           profit,
           vatEnabled: vatEnabled || false,
-          vatRate: Number(vatRate || 20),
+          vatRate: Number(vatRate || 22),
           vatAmount,
           totalWithVat,
           updatedAt: new Date()

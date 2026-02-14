@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const rawPage = parseInt(searchParams.get('page') || '1')
@@ -21,36 +24,41 @@ export async function GET(request: NextRequest) {
     const projectId = searchParams.get('projectId')
     const search = searchParams.get('search')
 
-    // Фильтрация документов в зависимости от роли пользователя
-    let where: any = {
-      creator: {
-        companyId: user.companyId
-      },
-      ...(projectId && { projectId }),
-      ...(search && {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' as const } },
-          { description: { contains: search, mode: 'insensitive' as const } }
-        ]
-      })
+    // Фильтр по компании: по companyId (индекс) или по creator для старых записей
+    const companyFilter = {
+      OR: [
+        { companyId: user.companyId },
+        { companyId: null, creator: { companyId: user.companyId } }
+      ] as const
     }
 
-    // OWNER и ADMIN видят все документы компании
-    if (user.role === UserRole.OWNER || user.role === UserRole.ADMIN) {
-      // Никаких дополнительных ограничений
-    } else {
-      // MANAGER и USER видят только документы проектов, где являются участниками
-      where.OR = [
-        { projectId: null }, // Документы без проекта (общие)
-        { 
-          project: {
-            OR: [
-              { creatorId: user.id }, // Пользователь создал проект
-              { users: { some: { userId: user.id } } } // Пользователь является участником проекта
-            ]
-          }
-        }
+    let where: any = {
+      AND: [
+        companyFilter,
+        ...(projectId ? [{ projectId }] : []),
+        ...(search ? [{
+          OR: [
+            { title: { contains: search, mode: 'insensitive' as const } },
+            { description: { contains: search, mode: 'insensitive' as const } }
+          ]
+        }] : [])
       ]
+    }
+
+    if (user.role !== UserRole.OWNER && user.role !== UserRole.ADMIN) {
+      where.AND.push({
+        OR: [
+          { projectId: null },
+          {
+            project: {
+              OR: [
+                { creatorId: user.id },
+                { users: { some: { userId: user.id } } }
+              ]
+            }
+          }
+        ]
+      })
     }
 
     const [documents, total] = await Promise.all([
@@ -119,6 +127,7 @@ export async function POST(request: NextRequest) {
         documentNumber: `DOC-${Date.now()}`,
         creatorId: user.id,
         projectId: projectId || null,
+        companyId: user.companyId ?? null,
         updatedAt: new Date()
       },
       include: {
