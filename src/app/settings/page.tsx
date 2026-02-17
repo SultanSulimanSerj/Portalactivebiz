@@ -75,9 +75,9 @@ export default function SettingsPage() {
         companyName: session.user.company?.name || '',
         phone: session.user.phone || '',
         address: session.user.address || '',
-        // Загружаем реквизиты компании
+        // Загружаем реквизиты компании (если legalName не задан — показываем короткое название компании)
         companyRequisites: {
-          legalName: session.user.company?.legalName || '',
+          legalName: session.user.company?.legalName || session.user.company?.name || '',
           inn: session.user.company?.inn || '',
           kpp: session.user.company?.kpp || '',
           ogrn: session.user.company?.ogrn || '',

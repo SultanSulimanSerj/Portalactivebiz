@@ -61,8 +61,12 @@ interface WorkStage {
   orderIndex: number
   plannedStart: string
   plannedEnd: string
+  plannedStartDate?: string
+  plannedEndDate?: string
   actualStart: string | null
   actualEnd: string | null
+  actualStartDate?: string | null
+  actualEndDate?: string | null
   progress: number
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'DELAYED'
   color: string
@@ -127,6 +131,8 @@ export default function ProjectSchedulePage() {
   const [editingStage, setEditingStage] = useState<WorkStage | null>(null)
   const [viewStartDate, setViewStartDate] = useState(new Date())
   const [exporting, setExporting] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [stageToDelete, setStageToDelete] = useState<string | null>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -187,34 +193,75 @@ export default function ProjectSchedulePage() {
     }
   }
 
-  // Вычисляем диапазон дат для отображения (4 недели)
+  // Вычисляем диапазон дат для отображения (4 недели) — каждый день строго в полночь локального времени
   const dateRange = useMemo(() => {
     const dates: Date[] = []
     const start = new Date(viewStartDate)
-    start.setDate(start.getDate() - start.getDay() + 1) // Начало недели (понедельник)
+    start.setHours(0, 0, 0, 0) // Обнуляем время до полночи
+    const dayOfWeek = start.getDay()
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Дней до понедельника
+    start.setDate(start.getDate() - daysToMonday) // Начало недели (понедельник) в полночь
     
     for (let i = 0; i < 28; i++) {
-      const date = new Date(start)
-      date.setDate(start.getDate() + i)
+      const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i, 0, 0, 0, 0)
       dates.push(date)
     }
     return dates
   }, [viewStartDate])
 
-  // Вычисляем позицию и ширину полосы этапа
+  // Календарная дата (YYYY-MM-DD) → timestamp локальной полуночи. Работает в любом часовом поясе.
+  const parseDateToLocalMidnight = (value: string | Date): number => {
+    if (value instanceof Date) {
+      return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+    }
+    const str = String(value)
+    const datePart = str.slice(0, 10)
+    const [y, m, d] = datePart.split('-').map(Number)
+    if (!y || !m || !d) return new Date(str).getTime()
+    return new Date(y, m - 1, d).getTime()
+  }
+
+  const getPlannedStartDate = (stage: WorkStage): string =>
+    stage.plannedStartDate ?? stage.plannedStart?.slice(0, 10) ?? ''
+  const getPlannedEndDate = (stage: WorkStage): string =>
+    stage.plannedEndDate ?? stage.plannedEnd?.slice(0, 10) ?? ''
+
   const getStagePosition = (stage: WorkStage) => {
-    const rangeStart = dateRange[0].getTime()
-    const rangeEnd = dateRange[dateRange.length - 1].getTime()
-    const rangeDuration = rangeEnd - rangeStart
+    const startStr = getPlannedStartDate(stage)
+    const endStr = getPlannedEndDate(stage)
+    if (!startStr || !endStr || !dateRange.length) return { left: '0%', width: '2%' }
     
-    const stageStart = new Date(stage.plannedStart).getTime()
-    const stageEnd = new Date(stage.plannedEnd).getTime()
+    // Парсим календарные даты этапа
+    const [startY, startM, startD] = startStr.split('-').map(Number)
+    const [endY, endM, endD] = endStr.split('-').map(Number)
+    if (!startY || !startM || !startD || !endY || !endM || !endD) return { left: '0%', width: '2%' }
     
-    const left = Math.max(0, ((stageStart - rangeStart) / rangeDuration) * 100)
-    const right = Math.min(100, ((stageEnd - rangeStart) / rangeDuration) * 100)
+    // Находим индексы колонок для дат начала и окончания
+    let startColIndex = -1
+    let endColIndex = -1
+    
+    for (let i = 0; i < dateRange.length; i++) {
+      const colDate = dateRange[i]
+      if (colDate.getFullYear() === startY && colDate.getMonth() === startM - 1 && colDate.getDate() === startD) {
+        startColIndex = i
+      }
+      if (colDate.getFullYear() === endY && colDate.getMonth() === endM - 1 && colDate.getDate() === endD) {
+        endColIndex = i
+      }
+    }
+    
+    // Если даты не найдены в диапазоне, возвращаем минимальную позицию
+    if (startColIndex < 0 || endColIndex < 0) {
+      return { left: '0%', width: '2%' }
+    }
+    
+    // Позиция: каждая колонка = 100% / 28 колонок
+    const colWidth = 100 / dateRange.length
+    const left = (startColIndex * colWidth)
+    const right = ((endColIndex + 1) * colWidth) // Конец = начало следующей колонки
     const width = right - left
-    
-    return { left: `${left}%`, width: `${Math.max(width, 2)}%` }
+
+    return { left: `${left}%`, width: `${Math.max(width, colWidth)}%` }
   }
 
   // Обработчики
@@ -255,16 +302,23 @@ export default function ProjectSchedulePage() {
     }
   }
 
-  const handleDelete = async (stageId: string) => {
-    if (!confirm('Удалить этот этап?')) return
+  const handleDeleteClick = (stageId: string) => {
+    setStageToDelete(stageId)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!stageToDelete) return
     
     try {
-      const response = await fetch(`/api/projects/${projectId}/stages/${stageId}`, {
+      const response = await fetch(`/api/projects/${projectId}/stages/${stageToDelete}`, {
         method: 'DELETE'
       })
       
       if (response.ok) {
         await fetchData()
+        setShowDeleteModal(false)
+        setStageToDelete(null)
       }
     } catch (error) {
       console.error('Error deleting stage:', error)
@@ -290,10 +344,10 @@ export default function ProjectSchedulePage() {
     setFormData({
       name: stage.name,
       description: stage.description || '',
-      plannedStart: stage.plannedStart.split('T')[0],
-      plannedEnd: stage.plannedEnd.split('T')[0],
-      actualStart: stage.actualStart?.split('T')[0] || '',
-      actualEnd: stage.actualEnd?.split('T')[0] || '',
+      plannedStart: getPlannedStartDate(stage),
+      plannedEnd: getPlannedEndDate(stage),
+      actualStart: stage.actualStartDate ?? stage.actualStart?.slice(0, 10) ?? '',
+      actualEnd: stage.actualEndDate ?? stage.actualEnd?.slice(0, 10) ?? '',
       progress: stage.progress,
       status: stage.status,
       responsibleId: stage.responsible?.id || '',
@@ -758,7 +812,7 @@ export default function ProjectSchedulePage() {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(stage.id)}
+                            onClick={() => handleDeleteClick(stage.id)}
                             className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1309,6 +1363,31 @@ export default function ProjectSchedulePage() {
                   Скачать
                 </a>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модальное окно подтверждения удаления этапа */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/20" onClick={() => { setShowDeleteModal(false); setStageToDelete(null) }} aria-hidden />
+          <div className="relative bg-white rounded-2xl shadow-xl border p-6 max-w-sm w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">Удалить этап?</h3>
+            <p className="text-sm text-gray-600 mb-6">Действие необратимо. Этап будет удалён вместе со всеми связанными данными (чек-лист, фото).</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setShowDeleteModal(false); setStageToDelete(null) }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg"
+              >
+                Удалить
+              </button>
             </div>
           </div>
         </div>

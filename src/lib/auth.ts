@@ -103,6 +103,7 @@ export const authOptions: NextAuthOptions = {
         if (token.company && typeof token.company === 'object') {
           session.user.company = {
             ...token.company,
+            name: token.company.name,
             // Реквизиты теперь доступны в сессии
             inn: token.company.inn,
             legalName: token.company.legalName,

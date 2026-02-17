@@ -49,6 +49,8 @@ export default function ChatPage() {
   const [typingUsers, setTypingUsers] = useState<string[]>([])
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false)
   const [mentionSearch, setMentionSearch] = useState('')
+  const [showProjectSuggestions, setShowProjectSuggestions] = useState(false)
+  const [projectMentionSearch, setProjectMentionSearch] = useState('')
   const [cursorPosition, setCursorPosition] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageInputRef = useRef<HTMLInputElement>(null)
@@ -226,24 +228,36 @@ export default function ChatPage() {
       })
     }
 
-    // Проверяем упоминания
+    // Упоминания: @ — сотрудники, # — проекты (какой символ ближе к курсору)
     const textBeforeCursor = value.substring(0, cursorPos)
     const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    const lastHashIndex = textBeforeCursor.lastIndexOf('#')
     
-    if (lastAtIndex !== -1) {
+    if (lastAtIndex > lastHashIndex) {
       const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
-      if (!textAfterAt.includes(' ') && textAfterAt.length >= 0) {
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('#')) {
         setMentionSearch(textAfterAt.toLowerCase())
         setShowMentionSuggestions(true)
+        setShowProjectSuggestions(false)
       } else {
         setShowMentionSuggestions(false)
       }
+    } else if (lastHashIndex > lastAtIndex) {
+      const textAfterHash = textBeforeCursor.substring(lastHashIndex + 1)
+      if (!textAfterHash.includes(' ') && !textAfterHash.includes('@')) {
+        setProjectMentionSearch(textAfterHash.toLowerCase())
+        setShowProjectSuggestions(true)
+        setShowMentionSuggestions(false)
+      } else {
+        setShowProjectSuggestions(false)
+      }
     } else {
       setShowMentionSuggestions(false)
+      setShowProjectSuggestions(false)
     }
   }
 
-  // Вставка упоминания
+  // Вставка упоминания сотрудника
   const insertMention = (userName: string) => {
     const textBeforeCursor = newMessage.substring(0, cursorPosition)
     const textAfterCursor = newMessage.substring(cursorPosition)
@@ -264,58 +278,68 @@ export default function ChatPage() {
     }
   }
 
-  // Получить подсказки для упоминаний
-  const getMentionSuggestions = () => {
-    if (selectedProject) {
-      // Для выбранного проекта - показываем участников проекта
-      const currentProject = projects.find(p => p.id === selectedProject)
+  // Вставка упоминания проекта
+  const insertProjectMention = (projectName: string) => {
+    const textBeforeCursor = newMessage.substring(0, cursorPosition)
+    const textAfterCursor = newMessage.substring(cursorPosition)
+    const lastHashIndex = textBeforeCursor.lastIndexOf('#')
+    
+    if (lastHashIndex !== -1) {
+      const newText = 
+        textBeforeCursor.substring(0, lastHashIndex) + 
+        `#${projectName} ` + 
+        textAfterCursor
       
-      console.log('🔍 Поиск подсказок (проект):', {
-        selectedProject,
-        currentProject: currentProject?.name,
-        hasUsers: !!currentProject?.users,
-        usersCount: currentProject?.users?.length || 0,
-        mentionSearch
-      })
+      setNewMessage(newText)
+      setShowProjectSuggestions(false)
       
-      if (!currentProject?.users) return []
-      
-      const filtered = currentProject.users
-        .filter(member => 
-          member.user.name.toLowerCase().includes(mentionSearch) ||
-          member.user.email.toLowerCase().includes(mentionSearch)
-        )
-        .slice(0, 5)
-      
-      console.log('✅ Найдено подсказок:', filtered.length)
-      return filtered.map(m => ({ user: m.user }))
-    } else {
-      // Для общего чата - показываем всех пользователей компании
-      console.log('🔍 Поиск подсказок (общий чат):', {
-        allUsersCount: allUsers.length,
-        mentionSearch
-      })
-      
-      const filtered = allUsers
-        .filter(user => 
-          user.name.toLowerCase().includes(mentionSearch) ||
-          user.email.toLowerCase().includes(mentionSearch)
-        )
-        .slice(0, 5)
-      
-      console.log('✅ Найдено подсказок:', filtered.length)
-      return filtered.map(u => ({ user: u }))
+      setTimeout(() => {
+        messageInputRef.current?.focus()
+      }, 0)
     }
   }
 
-  // Форматирование с упоминаниями
-  const formatMessageWithMentions = (content: string) => {
-    const mentionRegex = /@(\w+(?:\s+\w+)?)/g
-    const parts = []
-    let lastIndex = 0
-    let match
+  // Подсказки для упоминания сотрудников (поиск по имени/email, до 10 результатов)
+  const getMentionSuggestions = () => {
+    const search = mentionSearch.trim()
+    if (selectedProject) {
+      const currentProject = projects.find(p => p.id === selectedProject)
+      if (!currentProject?.users) return []
+      const filtered = currentProject.users
+        .filter(member =>
+          !search ||
+          member.user.name.toLowerCase().includes(search) ||
+          member.user.email.toLowerCase().includes(search)
+        )
+        .slice(0, 10)
+      return filtered.map(m => ({ user: m.user }))
+    }
+    const filtered = allUsers
+      .filter(user =>
+        !search ||
+        user.name.toLowerCase().includes(search) ||
+        user.email.toLowerCase().includes(search)
+      )
+      .slice(0, 10)
+    return filtered.map(u => ({ user: u }))
+  }
 
-    while ((match = mentionRegex.exec(content)) !== null) {
+  // Подсказки для упоминания проектов (поиск по названию, до 10 результатов)
+  const getProjectSuggestions = () => {
+    const search = projectMentionSearch.trim()
+    return projects
+      .filter(p => !search || p.name.toLowerCase().includes(search))
+      .slice(0, 10)
+  }
+
+  // Форматирование с упоминаниями (@сотрудники и #проекты)
+  const formatMessageWithMentions = (content: string) => {
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+    // Сначала разбиваем по @ и #, обрабатываем по порядку
+    const combinedRegex = /(@\S+(?:\s+\S+)*)|(#\S+(?:\s+\S+)*)/g
+    let match
+    while ((match = combinedRegex.exec(content)) !== null) {
       if (match.index > lastIndex) {
         parts.push(
           <span key={`text-${lastIndex}`}>
@@ -323,26 +347,35 @@ export default function ChatPage() {
           </span>
         )
       }
-
-      const currentUserName = session?.user?.name
-      const isMentioningMe = match[1] === currentUserName
-
-      parts.push(
-        <span
-          key={`mention-${match.index}`}
-          className={`${
-            isMentioningMe 
-              ? 'bg-blue-200 text-blue-900 font-semibold' 
-              : 'bg-blue-100 text-blue-700 font-medium'
-          } px-1 rounded`}
-        >
-          @{match[1]}
-        </span>
-      )
-
+      const full = match[0]
+      if (full.startsWith('@')) {
+        const name = full.slice(1).trim()
+        const isMentioningMe = name === session?.user?.name
+        parts.push(
+          <span
+            key={`mention-${match.index}`}
+            className={`${
+              isMentioningMe
+                ? 'bg-blue-200 text-blue-900 font-semibold'
+                : 'bg-blue-100 text-blue-700 font-medium'
+            } px-1 rounded`}
+          >
+            @{name}
+          </span>
+        )
+      } else {
+        const projectName = full.slice(1).trim()
+        parts.push(
+          <span
+            key={`project-${match.index}`}
+            className="bg-emerald-100 text-emerald-800 font-medium px-1 rounded"
+          >
+            #{projectName}
+          </span>
+        )
+      }
       lastIndex = match.index + match[0].length
     }
-
     if (lastIndex < content.length) {
       parts.push(
         <span key={`text-${lastIndex}`}>
@@ -350,7 +383,6 @@ export default function ChatPage() {
         </span>
       )
     }
-
     return parts.length > 0 ? parts : content
   }
 
@@ -368,12 +400,12 @@ export default function ChatPage() {
         })
       }
 
-      // Извлекаем упоминания
-      const mentionRegex = /@(\w+(?:\s+\w+)?)/g
-      const mentions = []
+      // Извлекаем упоминания сотрудников (@..., без #)
+      const mentionRegex = /@([^\s@#]+(?:\s+[^\s@#]+)*)/g
+      const mentions: string[] = []
       let match
       while ((match = mentionRegex.exec(newMessage)) !== null) {
-        mentions.push(match[1])
+        mentions.push(match[1].trim())
       }
 
       const response = await fetch('/api/chat', {
@@ -391,6 +423,7 @@ export default function ChatPage() {
       if (response.ok) {
         setNewMessage('')
         setShowMentionSuggestions(false)
+        setShowProjectSuggestions(false)
         // Сообщение придёт через WebSocket
       }
     } catch (err) {
@@ -566,35 +599,70 @@ export default function ChatPage() {
               <Smile className="h-4 w-4" />
             </Button>
             <div className="flex-1 relative">
-              {/* Автокомплит для упоминаний */}
-              {showMentionSuggestions && getMentionSuggestions().length > 0 && (
-                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+              {/* Подсказки: сотрудники (@) — с поиском по имени/email */}
+              {showMentionSuggestions && (
+                <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                   <div className="p-2 border-b border-gray-100">
-                    <p className="text-xs text-gray-500 font-medium">Упомянуть пользователя</p>
+                    <p className="text-xs text-gray-500 font-medium">Упомянуть сотрудника</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Введите имя или email для поиска</p>
                   </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {getMentionSuggestions().map((member) => (
-                      <button
-                        key={member.user.id}
-                        type="button"
-                        onClick={() => insertMention(member.user.name)}
-                        className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center gap-2 transition-colors"
-                      >
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs text-white font-medium">
-                            {member.user.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {member.user.name}
+                  <div className="max-h-52 overflow-y-auto">
+                    {getMentionSuggestions().length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-gray-500">Никого не найдено</p>
+                    ) : (
+                      getMentionSuggestions().map((member) => (
+                        <button
+                          key={member.user.id}
+                          type="button"
+                          onClick={() => insertMention(member.user.name)}
+                          className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                        >
+                          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs text-white font-medium">
+                              {member.user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {member.user.name}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {member.user.email}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Подсказки: проекты (#) — с поиском по названию */}
+              {showProjectSuggestions && (
+                <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                  <div className="p-2 border-b border-gray-100">
+                    <p className="text-xs text-gray-500 font-medium">Упомянуть проект</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Введите название для поиска</p>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {getProjectSuggestions().length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-gray-500">Проектов не найдено</p>
+                    ) : (
+                      getProjectSuggestions().map((project) => (
+                        <button
+                          key={project.id}
+                          type="button"
+                          onClick={() => insertProjectMention(project.name)}
+                          className="w-full px-3 py-2 text-left hover:bg-emerald-50 flex items-center gap-2 transition-colors"
+                        >
+                          <div className="w-6 h-6 bg-emerald-500 rounded flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs text-white font-medium">#</span>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900 truncate flex-1">
+                            {project.name}
                           </p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {member.user.email}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -607,9 +675,10 @@ export default function ChatPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
                     setShowMentionSuggestions(false)
+                    setShowProjectSuggestions(false)
                   }
                 }}
-                placeholder="Напишите сообщение... (используйте @ для упоминания)"
+                placeholder="Напишите сообщение... (@ — сотрудник, # — проект)"
                 disabled={sending}
               />
             </div>

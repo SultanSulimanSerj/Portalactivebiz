@@ -30,6 +30,7 @@ export default function DocumentsPage() {
   const [currentProject, setCurrentProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [projectFilter, setProjectFilter] = useState<string>(projectIdFromUrl || 'all')
   const [showModal, setShowModal] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -45,6 +46,7 @@ export default function DocumentsPage() {
     fetchProjects()
     if (projectIdFromUrl) {
       fetchCurrentProject()
+      setProjectFilter(projectIdFromUrl)
     }
   }, [projectIdFromUrl])
 
@@ -188,7 +190,7 @@ export default function DocumentsPage() {
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesProject = !projectIdFromUrl || doc.project?.id === projectIdFromUrl
+    const matchesProject = projectFilter === 'all' || !projectFilter || doc.project?.id === projectFilter
     return matchesSearch && matchesProject
   })
 
@@ -272,17 +274,31 @@ export default function DocumentsPage() {
           </button>
         </div>
 
-        {/* Search */}
+        {/* Filters */}
         <div className="bg-white rounded-lg p-4 border">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Поиск документов..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Поиск документов..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="all">Все проекты</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

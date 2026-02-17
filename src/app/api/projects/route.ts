@@ -230,6 +230,17 @@ export async function POST(request: NextRequest) {
         }
       })
 
+      // Создатель проекта сразу попадает в команду проекта (роль OWNER)
+      await tx.projectUser.create({
+        data: {
+          id: generateId(),
+          projectId: project.id,
+          userId: user.id,
+          role: 'OWNER',
+          companyId: user.companyId
+        }
+      })
+
       // Если указан бюджет, создаем финансовую запись в зависимости от статуса проекта
       if (parsedBudget && parsedBudget > 0) {
         const projectStatus = status || 'PLANNING'

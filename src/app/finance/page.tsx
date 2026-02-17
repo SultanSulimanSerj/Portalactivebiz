@@ -1,17 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Layout from '@/components/layout'
-import { Plus, TrendingUp, TrendingDown, Filter, X, Trash2, ArrowLeft, DollarSign, Percent, Download, Settings, Building2, ChevronRight } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, X, Trash2, ArrowLeft, DollarSign, Percent, Download, Settings, Building2, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { KpiCard } from '@/components/finance/KpiCard'
 import { ExpenseStructureChart } from '@/components/finance/ExpenseStructureChart'
 import { BudgetProgressBar } from '@/components/finance/BudgetProgressBar'
-import { BudgetCategoriesTable } from '@/components/finance/BudgetCategoriesTable'
-import { InvoicesTable } from '@/components/finance/InvoicesTable'
+import { BudgetCategoriesWithOperations } from '@/components/finance/BudgetCategoriesWithOperations'
 
 interface FinanceRecord {
   id: string
@@ -43,7 +41,6 @@ export default function FinancePage() {
   const [currentProject, setCurrentProject] = useState<any>(null)
   const [projectSearch, setProjectSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [filterType, setFilterType] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [showBudgetModal, setShowBudgetModal] = useState(false)
   const [budgetFormData, setBudgetFormData] = useState('')
@@ -501,10 +498,39 @@ export default function FinancePage() {
   const projectFilteredRecords = projectIdFromUrl 
     ? records.filter(r => r.project?.id === projectIdFromUrl)
     : records
-  
-  const filteredRecords = filterType === 'all' 
-    ? projectFilteredRecords 
-    : projectFilteredRecords.filter(r => r.type === filterType)
+
+  const operationsByCategory = useMemo(() => {
+    const expenses = projectFilteredRecords.filter(r => r.type === 'EXPENSE')
+    const map: Record<string, Array<{ id: string; date: string; amount: number; description?: string | null; counterparty?: string | null; invoiceNumber?: string | null }>> = {}
+    for (const r of expenses) {
+      const cat = r.category || 'Без категории'
+      if (!map[cat]) map[cat] = []
+      map[cat].push({
+        id: r.id,
+        date: r.date,
+        amount: r.amount,
+        description: r.description ?? undefined,
+        counterparty: r.counterparty ?? undefined,
+        invoiceNumber: r.invoiceNumber ?? undefined
+      })
+    }
+    return map
+  }, [projectFilteredRecords])
+
+  const incomeListForBlock = useMemo(() =>
+    invoicesData
+      .filter((i: { type: string }) => i.type === 'invoice')
+      .map((i: { id: string; number: string; amount: number; date?: string; dueDate: string; status: 'paid' | 'pending' | 'overdue'; description?: string; counterparty?: string | null }) => ({
+        id: i.id,
+        number: i.number,
+        amount: i.amount,
+        date: i.date || i.dueDate,
+        status: i.status,
+        description: i.description,
+        counterparty: i.counterparty ?? undefined
+      })),
+    [invoicesData]
+  )
   
   const totalIncome = projectFilteredRecords.filter(r => r.type === 'INCOME').reduce((sum, r) => sum + Number(r.amount), 0)
   const totalPlannedIncome = projectFilteredRecords.filter(r => r.type === 'PLANNED_INCOME').reduce((sum, r) => sum + Number(r.amount), 0)
@@ -609,7 +635,7 @@ export default function FinancePage() {
               {currentProject ? `Финансы: ${currentProject.name}` : 'Финансы'}
             </h1>
             <p className="text-sm text-gray-600 mt-1">
-              {currentProject ? `${filteredRecords.length} записей` : `Сводка по ${projectsForSummary.length} проектам`}
+              {currentProject ? `${projectFilteredRecords.length} записей` : `Сводка по ${projectsForSummary.length} проектам`}
             </p>
           </div>
           <div className="flex gap-2">
@@ -715,44 +741,6 @@ export default function FinancePage() {
         {/* Фильтры, освоение, структура, детализация — только при выбранном проекте */}
         {currentProject && (
           <>
-        <div className="bg-white rounded-lg p-4 border">
-          <div className="flex items-center gap-3">
-            <Filter className="h-4 w-4 text-gray-400" />
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                filterType === 'all' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Все
-            </button>
-            <button
-              onClick={() => setFilterType('INCOME')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                filterType === 'INCOME' ? 'bg-green-50 text-green-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Доходы
-            </button>
-            <button
-              onClick={() => setFilterType('PLANNED_INCOME')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                filterType === 'PLANNED_INCOME' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Планируемый доход
-            </button>
-            <button
-              onClick={() => setFilterType('EXPENSE')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                filterType === 'EXPENSE' ? 'bg-red-50 text-red-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Расходы
-            </button>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BudgetProgressBar
             budget={budgetData.budget}
@@ -768,129 +756,16 @@ export default function FinancePage() {
           />
         </div>
 
-        <Accordion type="multiple" className="w-full">
-          <AccordionItem value="categories">
-            <AccordionTrigger>Детализация по статьям (план/факт по проекту)</AccordionTrigger>
-            <AccordionContent>
-              <BudgetCategoriesTable 
-                data={categoriesData}
-                onAddOperation={handleAddOperation}
-              />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="invoices">
-            <AccordionTrigger>Счета и платежи</AccordionTrigger>
-            <AccordionContent>
-              <InvoicesTable 
-                data={invoicesData}
-                onCreateInvoice={handleCreateInvoice}
-                onCreatePayment={handleCreatePayment}
-                onMarkAsPaid={handleMarkAsPaid}
-              />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+        <BudgetCategoriesWithOperations
+          categoriesData={categoriesData}
+          operationsByCategory={operationsByCategory}
+          incomeList={incomeListForBlock}
+          onAddOperation={handleAddOperation}
+          onCreateInvoice={handleCreateInvoice}
+          onCreatePayment={handleCreatePayment}
+        />
           </>
         )}
-
-        {/* Итого по показанным записям */}
-        {(() => {
-          const totalShownIncome = filteredRecords.filter(r => r.type === 'INCOME').reduce((s, r) => s + Number(r.amount), 0)
-          const totalShownExpense = filteredRecords.filter(r => r.type === 'EXPENSE').reduce((s, r) => s + Number(r.amount), 0)
-          const shownBalance = totalShownIncome - totalShownExpense
-          return (
-            <div className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-gray-50 text-sm mb-4">
-              <span className="font-medium text-gray-700">Итого по показанным записям:</span>
-              <span>{filteredRecords.length} записей</span>
-              <span className="text-green-600 font-medium">Доходы: {formatMoney(totalShownIncome)}</span>
-              <span className="text-red-600 font-medium">Расходы: {formatMoney(totalShownExpense)}</span>
-              <span className={`font-semibold ${shownBalance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                Баланс: {formatMoney(shownBalance)}
-              </span>
-            </div>
-          )
-        })()}
-
-        {/* Таблица записей: при сводке — все с колонкой "Проект", при проекте — только по проекту */}
-        <div className="bg-white rounded-lg border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-20">Тип</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Категория</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Проект</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Номер счёта</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Контрагент</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Сумма</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Действия</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredRecords.map((record) => (
-                  <tr key={record.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center">
-                        {record.type === 'INCOME' ? (
-                          <div className="p-1.5 bg-green-50 rounded">
-                            <TrendingUp className="h-4 w-4 text-green-600" />
-                          </div>
-                        ) : record.type === 'PLANNED_INCOME' ? (
-                          <div className="p-1.5 bg-blue-50 rounded">
-                            <DollarSign className="h-4 w-4 text-blue-600" />
-                          </div>
-                        ) : (
-                          <div className="p-1.5 bg-red-50 rounded">
-                            <TrendingDown className="h-4 w-4 text-red-600" />
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm font-semibold text-gray-900">{record.category}</div>
-                      {record.description && (
-                        <div className="text-xs text-gray-500 line-clamp-1">{record.description}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-700">{record.project?.name || '—'}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-700">
-                        {new Date(record.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-600">{record.invoiceNumber || '—'}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-sm text-gray-600 max-w-[140px] truncate" title={record.counterparty || undefined}>{record.counterparty || '—'}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className={`text-sm font-bold ${
-                        record.type === 'INCOME' ? 'text-green-600' : 
-                        record.type === 'PLANNED_INCOME' ? 'text-blue-600' : 
-                        'text-red-600'
-                      }`}>
-                        {record.type === 'EXPENSE' ? '-' : '+'}{Number(record.amount).toLocaleString()} ₽
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button 
-                        onClick={() => handleDeleteClick(record.id)}
-                        className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
-                        title="Удалить"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
         {/* Budget Settings Modal */}
         {showBudgetModal && (

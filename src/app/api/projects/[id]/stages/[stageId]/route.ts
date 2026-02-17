@@ -3,6 +3,21 @@ import { prisma } from '@/lib/prisma'
 import { checkPermission, canUserAccessProject } from '@/lib/auth-middleware'
 import { generateId } from '@/lib/id-generator'
 
+function parseDateOnlyToUTC(dateStr: string | undefined): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null
+  const part = dateStr.slice(0, 10)
+  const [y, m, d] = part.split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(Date.UTC(y, m - 1, d))
+}
+
+function formatDateToYYYYMMDD(d: Date): string {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // GET - получить один этап
 export async function GET(
   request: NextRequest,
@@ -41,7 +56,15 @@ export async function GET(
       return NextResponse.json({ error: 'Этап не найден' }, { status: 404 })
     }
 
-    return NextResponse.json(stage)
+    const stageWithDates = {
+      ...stage,
+      plannedStartDate: formatDateToYYYYMMDD(stage.plannedStart),
+      plannedEndDate: formatDateToYYYYMMDD(stage.plannedEnd),
+      actualStartDate: stage.actualStart ? formatDateToYYYYMMDD(stage.actualStart) : null,
+      actualEndDate: stage.actualEnd ? formatDateToYYYYMMDD(stage.actualEnd) : null
+    }
+
+    return NextResponse.json(stageWithDates)
   } catch (error) {
     console.error('Error fetching work stage:', error)
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 })
@@ -109,14 +132,23 @@ export async function PUT(
         }
       }
 
-      // Обновляем этап
+      const plannedStartUtc = plannedStart !== undefined ? parseDateOnlyToUTC(plannedStart) : undefined
+      const plannedEndUtc = plannedEnd !== undefined ? parseDateOnlyToUTC(plannedEnd) : undefined
+      if (plannedStart !== undefined && !plannedStartUtc) {
+        throw new Error('Некорректный формат даты начала (ожидается YYYY-MM-DD)')
+      }
+      if (plannedEnd !== undefined && !plannedEndUtc) {
+        throw new Error('Некорректный формат даты окончания (ожидается YYYY-MM-DD)')
+      }
+
+      // Обновляем этап (даты — UTC полночь выбранного дня)
       const updated = await tx.workStage.update({
         where: { id: params.stageId },
         data: {
           ...(name !== undefined && { name }),
           ...(description !== undefined && { description: description || null }),
-          ...(plannedStart !== undefined && { plannedStart: new Date(plannedStart) }),
-          ...(plannedEnd !== undefined && { plannedEnd: new Date(plannedEnd) }),
+          ...(plannedStartUtc !== undefined && { plannedStart: plannedStartUtc }),
+          ...(plannedEndUtc !== undefined && { plannedEnd: plannedEndUtc }),
           ...(actualStart !== undefined && { actualStart: actualStart ? new Date(actualStart) : null }),
           ...(actualEnd !== undefined && { actualEnd: actualEnd ? new Date(actualEnd) : null }),
           ...(progress !== undefined && { progress: Math.min(100, Math.max(0, progress)) }),
@@ -142,7 +174,16 @@ export async function PUT(
       return updated
     })
 
-    return NextResponse.json(stage)
+    // Добавляем календарные даты для клиента
+    const stageWithDates = {
+      ...stage,
+      plannedStartDate: formatDateToYYYYMMDD(stage.plannedStart),
+      plannedEndDate: formatDateToYYYYMMDD(stage.plannedEnd),
+      actualStartDate: stage.actualStart ? formatDateToYYYYMMDD(stage.actualStart) : null,
+      actualEndDate: stage.actualEnd ? formatDateToYYYYMMDD(stage.actualEnd) : null
+    }
+
+    return NextResponse.json(stageWithDates)
   } catch (error) {
     console.error('Error updating work stage:', error)
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 })

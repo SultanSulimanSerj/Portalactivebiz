@@ -85,7 +85,14 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
-    return NextResponse.json(project)
+    // Чтобы в графике работ и др. всегда был кого назначить: включаем создателя в список участников, если его ещё нет
+    const users = project.users || []
+    const creatorInUsers = project.creator && users.some((pu: { user: { id: string } }) => pu.user?.id === project.creator?.id)
+    const usersWithCreator = project.creator && !creatorInUsers
+      ? [{ user: project.creator }, ...users]
+      : users
+
+    return NextResponse.json({ ...project, users: usersWithCreator })
   } catch (error) {
     console.error('Error fetching project:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

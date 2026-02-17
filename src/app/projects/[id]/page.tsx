@@ -532,16 +532,17 @@ export default function ProjectDetailPage() {
     }
   }
 
-  // Фильтрация пользователей для упоминаний
+  // Подсказки для упоминаний сотрудников (поиск по имени/email, до 10 результатов)
   const getMentionSuggestions = () => {
     if (!project?.users) return []
-    
+    const search = mentionSearch.trim()
     return project.users
-      .filter(member => 
-        member.user.name.toLowerCase().includes(mentionSearch) ||
-        member.user.email.toLowerCase().includes(mentionSearch)
+      .filter(member =>
+        !search ||
+        member.user.name.toLowerCase().includes(search) ||
+        member.user.email.toLowerCase().includes(search)
       )
-      .slice(0, 5) // Показываем максимум 5 подсказок
+      .slice(0, 10)
   }
 
   // Форматирование сообщения с подсветкой упоминаний
@@ -1246,35 +1247,40 @@ export default function ProjectDetailPage() {
             </div>
 
             <div className="relative flex gap-3">
-              {/* Автокомплит для упоминаний */}
-              {showMentionSuggestions && getMentionSuggestions().length > 0 && (
-                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+              {/* Подсказки: сотрудники (@) — поиск по имени/email, до 10 результатов */}
+              {showMentionSuggestions && (
+                <div className="absolute bottom-full left-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
                   <div className="p-2 border-b border-gray-100">
-                    <p className="text-xs text-gray-500 font-medium">Упомянуть пользователя</p>
+                    <p className="text-xs text-gray-500 font-medium">Упомянуть сотрудника</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Введите имя или email для поиска</p>
                   </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {getMentionSuggestions().map((member) => (
-                      <button
-                        key={member.user.id}
-                        type="button"
-                        onClick={() => insertMention(member.user.name)}
-                        className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center gap-2 transition-colors"
-                      >
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-xs text-white font-medium">
-                            {member.user.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {member.user.name}
-                          </p>
-                          <p className="text-xs text-gray-500 truncate">
-                            {member.user.email}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="max-h-52 overflow-y-auto">
+                    {getMentionSuggestions().length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-gray-500">Никого не найдено</p>
+                    ) : (
+                      getMentionSuggestions().map((member) => (
+                        <button
+                          key={member.user.id}
+                          type="button"
+                          onClick={() => insertMention(member.user.name)}
+                          className="w-full px-3 py-2 text-left hover:bg-blue-50 flex items-center gap-2 transition-colors"
+                        >
+                          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs text-white font-medium">
+                              {member.user.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {member.user.name}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {member.user.email}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

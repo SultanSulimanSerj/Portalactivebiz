@@ -3,6 +3,23 @@ import { prisma } from '@/lib/prisma'
 import { checkPermission, canUserAccessProject } from '@/lib/auth-middleware'
 import { generateId } from '@/lib/id-generator'
 
+// Календарная дата YYYY-MM-DD → Date в UTC полночь (без сдвига по таймзоне сервера)
+function parseDateOnlyToUTC(dateStr: string | undefined): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null
+  const part = dateStr.slice(0, 10)
+  const [y, m, d] = part.split('-').map(Number)
+  if (!y || !m || !d) return null
+  return new Date(Date.UTC(y, m - 1, d))
+}
+
+// Date → YYYY-MM-DD по UTC (календарная дата без привязки к таймзоне)
+function formatDateToYYYYMMDD(d: Date): string {
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // GET - получить все этапы работ проекта
 export async function GET(
   request: NextRequest,
@@ -46,7 +63,16 @@ export async function GET(
       ]
     })
 
-    return NextResponse.json(stages)
+    // Календарные даты в формате YYYY-MM-DD по UTC (одинаково для любого часового пояса)
+    const stagesWithDateOnly = stages.map((s) => ({
+      ...s,
+      plannedStartDate: s.plannedStart ? formatDateToYYYYMMDD(new Date(s.plannedStart)) : null,
+      plannedEndDate: s.plannedEnd ? formatDateToYYYYMMDD(new Date(s.plannedEnd)) : null,
+      actualStartDate: s.actualStart ? formatDateToYYYYMMDD(new Date(s.actualStart)) : null,
+      actualEndDate: s.actualEnd ? formatDateToYYYYMMDD(new Date(s.actualEnd)) : null
+    }))
+
+    return NextResponse.json(stagesWithDateOnly)
   } catch (error) {
     console.error('Error fetching work stages:', error)
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 })
@@ -107,14 +133,20 @@ export async function POST(
       select: { orderIndex: true }
     })
 
-    // Создаём этап
+    const plannedStartUtc = parseDateOnlyToUTC(plannedStart)
+    const plannedEndUtc = parseDateOnlyToUTC(plannedEnd)
+    if (!plannedStartUtc || !plannedEndUtc) {
+      return NextResponse.json({ error: 'Некорректный формат дат (ожидается YYYY-MM-DD)' }, { status: 400 })
+    }
+
+    // Создаём этап (даты храним как UTC полночь выбранного дня)
     const stage = await prisma.workStage.create({
       data: {
         id: generateId(),
         name,
         description: description || null,
-        plannedStart: new Date(plannedStart),
-        plannedEnd: new Date(plannedEnd),
+        plannedStart: plannedStartUtc,
+        plannedEnd: plannedEndUtc,
         orderIndex: (maxOrder?.orderIndex ?? -1) + 1,
         color: color || '#3B82F6',
         projectId: params.id,
@@ -142,7 +174,16 @@ export async function POST(
       }
     })
 
-    return NextResponse.json(stage, { status: 201 })
+    // Добавляем календарные даты для клиента (как в GET)
+    const stageWithDates = {
+      ...stage,
+      plannedStartDate: formatDateToYYYYMMDD(stage.plannedStart),
+      plannedEndDate: formatDateToYYYYMMDD(stage.plannedEnd),
+      actualStartDate: stage.actualStart ? formatDateToYYYYMMDD(stage.actualStart) : null,
+      actualEndDate: stage.actualEnd ? formatDateToYYYYMMDD(stage.actualEnd) : null
+    }
+
+    return NextResponse.json(stageWithDates, { status: 201 })
   } catch (error) {
     console.error('Error creating work stage:', error)
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 })

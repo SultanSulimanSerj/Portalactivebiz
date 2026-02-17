@@ -29,6 +29,7 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [projectFilter, setProjectFilter] = useState<string>(projectIdFromUrl || 'all')
   const [showModal, setShowModal] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [formData, setFormData] = useState({
@@ -47,6 +48,7 @@ export default function TasksPage() {
     fetchUsers()
     if (projectIdFromUrl) {
       fetchCurrentProject()
+      setProjectFilter(projectIdFromUrl)
     }
   }, [projectIdFromUrl])
 
@@ -183,7 +185,7 @@ export default function TasksPage() {
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || t.status === statusFilter
-    const matchesProject = !projectIdFromUrl || t.project?.id === projectIdFromUrl
+    const matchesProject = projectFilter === 'all' || !projectFilter || t.project?.id === projectFilter
     return matchesSearch && matchesStatus && matchesProject
   })
 
@@ -270,7 +272,7 @@ export default function TasksPage() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg p-4 border">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
@@ -290,6 +292,18 @@ export default function TasksPage() {
               <option value="TODO">К выполнению</option>
               <option value="IN_PROGRESS">В работе</option>
               <option value="COMPLETED">Завершена</option>
+            </select>
+            <select
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="all">Все проекты</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
