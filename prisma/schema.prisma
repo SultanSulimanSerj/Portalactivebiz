@@ -53,30 +53,30 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Relations
-  accounts            Account[]
-  sessions            Session[]
-  companyId           String?
-  company             Company? @relation(fields: [companyId], references: [id])
-  assignedProjects    ProjectUser[]
-  assignedTasks       TaskAssignment[]
-  createdProjects     Project[] @relation("ProjectCreator")
-  createdTasks        Task[] @relation("TaskCreator")
-  createdDocuments    Document[] @relation("DocumentCreator")
-  createdApprovals    Approval[] @relation("ApprovalCreator")
-  approvalAssignments ApprovalAssignment[]
-  chatMessages        ChatMessage[]
-  timesheets          Timesheet[]
-  notifications       Notification[]
-  taskComments        TaskComment[] @relation("TaskComments")
-  finances            Finance[]
-  approvalComments    ApprovalComment[] @relation("ApprovalComments")
-  approvalAttachments ApprovalAttachment[] @relation("ApprovalAttachments")
-  approvalHistory     ApprovalHistory[] @relation("ApprovalHistory")
-  createdEstimates    Estimate[] @relation("EstimateCreator")
-  responsibleWorkStages WorkStage[] @relation("WorkStageResponsible")
-  paidFinances          Finance[] @relation("FinancePaidBy")
-  checklistsCompleted   ChecklistItem[] @relation("ChecklistCompletedBy")
-  uploadedPhotos        StagePhoto[] @relation("StagePhotoUploadedBy")
+  accounts              Account[]
+  sessions              Session[]
+  companyId             String?
+  company               Company?             @relation(fields: [companyId], references: [id])
+  assignedProjects      ProjectUser[]
+  assignedTasks         TaskAssignment[]
+  createdProjects       Project[]            @relation("ProjectCreator")
+  createdTasks          Task[]               @relation("TaskCreator")
+  createdDocuments      Document[]           @relation("DocumentCreator")
+  createdApprovals      Approval[]           @relation("ApprovalCreator")
+  approvalAssignments   ApprovalAssignment[]
+  chatMessages          ChatMessage[]
+  timesheets            Timesheet[]
+  notifications         Notification[]
+  taskComments          TaskComment[]        @relation("TaskComments")
+  finances              Finance[]
+  approvalComments      ApprovalComment[]    @relation("ApprovalComments")
+  approvalAttachments   ApprovalAttachment[] @relation("ApprovalAttachments")
+  approvalHistory       ApprovalHistory[]    @relation("ApprovalHistory")
+  createdEstimates      Estimate[]           @relation("EstimateCreator")
+  responsibleWorkStages WorkStage[]          @relation("WorkStageResponsible")
+  paidFinances          Finance[]            @relation("FinancePaidBy")
+  checklistsCompleted   ChecklistItem[]      @relation("ChecklistCompletedBy")
+  uploadedPhotos        StagePhoto[]         @relation("StagePhotoUploadedBy")
 
   @@index([companyId])
   @@index([role])
@@ -93,12 +93,12 @@ model VerificationToken {
 }
 
 model Company {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  website     String?
-  phone       String?
-  address     String?
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String?
+  website              String?
+  phone                String?
+  address              String?
   actualAddress        String?
   bankAccount          String?
   bankBik              String?
@@ -108,89 +108,90 @@ model Company {
   contactPhone         String?
   correspondentAccount String?
   directorName         String?
-  directorPosition     String?            @default("Генеральный директор")
+  directorPosition     String?  @default("Генеральный директор")
   inn                  String?
   kpp                  String?
   legalAddress         String?
   legalName            String?
   ogrn                 String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   // Relations
-  users      User[]
-  projects   Project[]
-  templates  DocumentTemplate[]
-  numberingRules NumberingRule[]
-  tasks      Task[]
-  taskAssignments TaskAssignment[]
-  taskDependencies TaskDependency[]
-  taskComments TaskComment[]
-  documents  Document[]
-  documentVersions DocumentVersion[]
-  approvals  Approval[]
-  approvalAssignments ApprovalAssignment[]
-  chatMessages ChatMessage[]
-  finances   Finance[]
-  timesheets Timesheet[]
-  notifications Notification[]
+  users                User[]
+  projects             Project[]
+  templates            DocumentTemplate[]
+  numberingRules       NumberingRule[]
+  tasks                Task[]
+  taskAssignments      TaskAssignment[]
+  taskDependencies     TaskDependency[]
+  taskComments         TaskComment[]
+  taskSubtasks         TaskSubtask[]
+  documents            Document[]
+  documentVersions     DocumentVersion[]
+  approvals            Approval[]
+  approvalAssignments  ApprovalAssignment[]
+  chatMessages         ChatMessage[]
+  finances             Finance[]
+  timesheets           Timesheet[]
+  notifications        Notification[]
   notificationSettings NotificationSettings?
-  projectObjects ProjectObject[]
-  projectUsers ProjectUser[]
-  estimates Estimate[]
-  estimateItems EstimateItem[]
-  workStages WorkStage[]
+  projectObjects       ProjectObject[]
+  projectUsers         ProjectUser[]
+  estimates            Estimate[]
+  estimateItems        EstimateItem[]
+  workStages           WorkStage[]
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?
-  status      ProjectStatus @default(PLANNING)
-  priority   ProjectPriority @default(MEDIUM)
-  startDate   DateTime?
-  endDate     DateTime?
-  budget      Decimal?      @db.Decimal(15, 2)
-  expensePlan Decimal?      @db.Decimal(15, 2)
-  actualCost  Decimal?      @db.Decimal(15, 2)
-  clientName String?
-  clientLegalName String?
-  clientLegalAddress String?
-  clientActualAddress String?
-  clientBankAccount String?
-  clientBankBik String?
-  clientBankName String?
-  clientContactPhone String?
-  clientContactEmail String?
+  id                         String          @id @default(cuid())
+  name                       String
+  description                String?
+  status                     ProjectStatus   @default(PLANNING)
+  priority                   ProjectPriority @default(MEDIUM)
+  startDate                  DateTime?
+  endDate                    DateTime?
+  budget                     Decimal?        @db.Decimal(15, 2)
+  expensePlan                Decimal?        @db.Decimal(15, 2)
+  actualCost                 Decimal?        @db.Decimal(15, 2)
+  clientName                 String?
+  clientLegalName            String?
+  clientLegalAddress         String?
+  clientActualAddress        String?
+  clientBankAccount          String?
+  clientBankBik              String?
+  clientBankName             String?
+  clientContactPhone         String?
+  clientContactEmail         String?
   clientCorrespondentAccount String?
-  clientDirectorName String?
-  clientInn String?
-  clientKpp String?
-  clientOgrn String?
+  clientDirectorName         String?
+  clientInn                  String?
+  clientKpp                  String?
+  clientOgrn                 String?
   // Дополнительные поля проекта
-  objectAddress String?      // Адрес объекта
-  contractNumber String?     // Номер договора
-  contractDate DateTime?     // Дата договора
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  objectAddress              String? // Адрес объекта
+  contractNumber             String? // Номер договора
+  contractDate               DateTime? // Дата договора
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
 
   // Relations
-  companyId   String
-  company     Company @relation(fields: [companyId], references: [id])
-  creatorId   String
-  creator     User @relation("ProjectCreator", fields: [creatorId], references: [id])
-  users       ProjectUser[]
-  tasks       Task[]
-  documents   Document[]
-  approvals   Approval[]
-  chatMessages ChatMessage[]
-  finances    Finance[]
-  objects     ProjectObject[]
-  timesheets  Timesheet[]
+  companyId     String
+  company       Company         @relation(fields: [companyId], references: [id])
+  creatorId     String
+  creator       User            @relation("ProjectCreator", fields: [creatorId], references: [id])
+  users         ProjectUser[]
+  tasks         Task[]
+  documents     Document[]
+  approvals     Approval[]
+  chatMessages  ChatMessage[]
+  finances      Finance[]
+  objects       ProjectObject[]
+  timesheets    Timesheet[]
   notifications Notification[]
-  estimates   Estimate[]
-  workStages  WorkStage[]
+  estimates     Estimate[]
+  workStages    WorkStage[]
 
   @@index([companyId])
   @@index([status])
@@ -211,7 +212,7 @@ model ProjectObject {
   updatedAt   DateTime @updatedAt
 
   projectId String
-  project   Project @relation(fields: [projectId], references: [id])
+  project   Project  @relation(fields: [projectId], references: [id])
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
@@ -219,14 +220,14 @@ model ProjectObject {
 }
 
 model ProjectUser {
-  id        String   @id @default(cuid())
-  role      ProjectRole @default(MEMBER)
-  joinedAt  DateTime @default(now())
+  id       String      @id @default(cuid())
+  role     ProjectRole @default(MEMBER)
+  joinedAt DateTime    @default(now())
 
   projectId String
-  project   Project @relation(fields: [projectId], references: [id])
+  project   Project  @relation(fields: [projectId], references: [id])
   userId    String
-  user      User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
@@ -235,31 +236,31 @@ model ProjectUser {
 }
 
 model Task {
-  id          String     @id @default(cuid())
+  id          String       @id @default(cuid())
   title       String
   description String?
-  status      TaskStatus @default(TODO)
-  priority   TaskPriority @default(MEDIUM)
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
   startDate   DateTime?
   dueDate     DateTime?
   completedAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   // Relations
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id])
-  creatorId String
-  creator   User @relation("TaskCreator", fields: [creatorId], references: [id])
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-  assignments TaskAssignment[]
+  projectId    String?
+  project      Project?         @relation(fields: [projectId], references: [id])
+  creatorId    String
+  creator      User             @relation("TaskCreator", fields: [creatorId], references: [id])
+  companyId    String?
+  company      Company?         @relation(fields: [companyId], references: [id])
+  assignments  TaskAssignment[]
   dependencies TaskDependency[] @relation("TaskDependency")
   dependsOn    TaskDependency[] @relation("DependsOnTask")
-  comments TaskComment[]
+  comments     TaskComment[]
+  subtasks     TaskSubtask[]
 
   @@index([companyId])
-
   @@index([projectId])
   @@index([status])
   @@index([priority])
@@ -270,30 +271,30 @@ model Task {
 }
 
 model TaskAssignment {
-  id        String   @id @default(cuid())
+  id         String   @id @default(cuid())
   assignedAt DateTime @default(now())
 
-  taskId String
-  task   Task @relation(fields: [taskId], references: [id])
-  userId String
-  user   User @relation(fields: [userId], references: [id])
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
   companyId String?
-  company Company? @relation(fields: [companyId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@unique([taskId, userId])
   @@index([companyId])
 }
 
 model TaskDependency {
-  id        String @id @default(cuid())
-  type      DependencyType @default(FINISH_TO_START)
+  id   String         @id @default(cuid())
+  type DependencyType @default(FINISH_TO_START)
 
-  taskId String
-  task   Task @relation("TaskDependency", fields: [taskId], references: [id])
+  taskId      String
+  task        Task     @relation("TaskDependency", fields: [taskId], references: [id])
   dependsOnId String
-  dependsOn   Task @relation("DependsOnTask", fields: [dependsOnId], references: [id])
-  companyId String?
-  company Company? @relation(fields: [companyId], references: [id])
+  dependsOn   Task     @relation("DependsOnTask", fields: [dependsOnId], references: [id])
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id])
 
   @@unique([taskId, dependsOnId])
   @@index([companyId])
@@ -305,42 +306,59 @@ model TaskComment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  taskId String
-  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId String
-  user   User @relation("TaskComments", fields: [userId], references: [id])
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("TaskComments", fields: [userId], references: [id])
   companyId String?
-  company Company? @relation(fields: [companyId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
 }
 
-model Document {
-  id          String         @id @default(cuid())
+model TaskSubtask {
+  id          String   @id @default(cuid())
   title       String
-  description String?
-  fileName    String
-  filePath    String
-  fileSize    Int
-  mimeType    String
-  version     Int            @default(1)
-  isLatest    Boolean        @default(true)
-  documentNumber String?
-  isPublished      Boolean           @default(false)
-  publishedAt      DateTime?
-  approvalRequired Boolean           @default(false)
-  category         String?           @default("GENERAL")
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  isCompleted Boolean  @default(false)
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  // Relations
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id])
-  creatorId String
-  creator   User @relation("DocumentCreator", fields: [creatorId], references: [id])
-  templateId String?
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
+
+  @@index([taskId])
+  @@index([companyId])
+}
+
+model Document {
+  id               String    @id @default(cuid())
+  title            String
+  description      String?
+  fileName         String
+  filePath         String
+  fileSize         Int
+  mimeType         String
+  version          Int       @default(1)
+  isLatest         Boolean   @default(true)
+  documentNumber   String?
+  isPublished      Boolean   @default(false)
+  publishedAt      DateTime?
+  approvalRequired Boolean   @default(false)
+  category         String?   @default("GENERAL")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  projectId  String?
+  project    Project?          @relation(fields: [projectId], references: [id])
+  creatorId  String
+  creator    User              @relation("DocumentCreator", fields: [creatorId], references: [id])
+  templateId String?
+  companyId  String?
+  company    Company?          @relation(fields: [companyId], references: [id])
   template   DocumentTemplate? @relation(fields: [templateId], references: [id])
   versions   DocumentVersion[]
   approvals  Approval[]
@@ -358,18 +376,18 @@ model Document {
 }
 
 model DocumentVersion {
-  id          String   @id @default(cuid())
-  version     Int
-  fileName    String
-  filePath    String
-  fileSize    Int
-  mimeType    String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  version   Int
+  fileName  String
+  filePath  String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime @default(now())
 
   documentId String
   document   Document @relation(fields: [documentId], references: [id])
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
 }
@@ -385,35 +403,35 @@ model DocumentTemplate {
   updatedAt   DateTime @updatedAt
 
   companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company    @relation(fields: [companyId], references: [id])
   documents Document[]
 }
 
 model Approval {
-  id          String        @id @default(cuid())
-  title       String
-  description String?
-  status      ApprovalStatus @default(PENDING)
-  type        ApprovalType
-  data        Json?
-  priority              ApprovalPriority     @default(MEDIUM)
+  id                    String           @id @default(cuid())
+  title                 String
+  description           String?
+  status                ApprovalStatus   @default(PENDING)
+  type                  ApprovalType
+  data                  Json?
+  priority              ApprovalPriority @default(MEDIUM)
   dueDate               DateTime?
-  createdAt             DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
   approvedAt            DateTime?
   rejectedAt            DateTime?
-  requireAllApprovals   Boolean              @default(false)
-  autoPublishOnApproval Boolean              @default(true)
+  requireAllApprovals   Boolean          @default(false)
+  autoPublishOnApproval Boolean          @default(true)
 
   // Relations
-  projectId String?
-  project   Project? @relation(fields: [projectId], references: [id])
-  documentId String?
-  document  Document? @relation(fields: [documentId], references: [id])
-  creatorId String
-  creator   User @relation("ApprovalCreator", fields: [creatorId], references: [id])
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  projectId   String?
+  project     Project?             @relation(fields: [projectId], references: [id])
+  documentId  String?
+  document    Document?            @relation(fields: [documentId], references: [id])
+  creatorId   String
+  creator     User                 @relation("ApprovalCreator", fields: [creatorId], references: [id])
+  companyId   String?
+  company     Company?             @relation(fields: [companyId], references: [id])
   assignments ApprovalAssignment[]
   comments    ApprovalComment[]
   attachments ApprovalAttachment[]
@@ -423,18 +441,18 @@ model Approval {
 }
 
 model ApprovalAssignment {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   status    ApprovalStatus @default(PENDING)
   comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 
   approvalId String
   approval   Approval @relation(fields: [approvalId], references: [id])
   userId     String
-  user       User @relation(fields: [userId], references: [id])
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
 
   @@unique([approvalId, userId])
   @@index([companyId])
@@ -449,7 +467,7 @@ model ChatMessage {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
   userId    String
-  user      User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
@@ -457,29 +475,29 @@ model ChatMessage {
 }
 
 model Finance {
-  id          String      @id @default(cuid())
-  type        FinanceType
-  category    String
-  description String?
-  amount      Decimal     @db.Decimal(15, 2)
-  date        DateTime
+  id            String      @id @default(cuid())
+  type          FinanceType
+  category      String
+  description   String?
+  amount        Decimal     @db.Decimal(15, 2)
+  date          DateTime
   // Поля для отслеживания оплаты и сверки с банком
-  invoiceNumber String?    // Номер счёта
-  counterparty  String?    // Контрагент (получатель/плательщик)
-  isPaid        Boolean    @default(false)
-  paidAt        DateTime?  // Когда оплачен
-  paidById      String?    // Кто отметил оплату
-  paidBy        User?      @relation("FinancePaidBy", fields: [paidById], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  invoiceNumber String? // Номер счёта
+  counterparty  String? // Контрагент (получатель/плательщик)
+  isPaid        Boolean     @default(false)
+  paidAt        DateTime? // Когда оплачен
+  paidById      String? // Кто отметил оплату
+  paidBy        User?       @relation("FinancePaidBy", fields: [paidById], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creatorId String
-  creator   User @relation(fields: [creatorId], references: [id])
+  creator   User     @relation(fields: [creatorId], references: [id])
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
-  
+
   // Связь с позицией сметы
   estimateItemId String?
   estimateItem   EstimateItem? @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
@@ -498,9 +516,9 @@ model Timesheet {
   updatedAt   DateTime @updatedAt
 
   projectId String
-  project   Project @relation(fields: [projectId], references: [id])
+  project   Project  @relation(fields: [projectId], references: [id])
   userId    String
-  user      User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id])
 
@@ -509,49 +527,49 @@ model Timesheet {
 
 // График работ - этапы проекта
 model WorkStage {
-  id              String    @id @default(cuid())
-  name            String
-  description     String?
-  orderIndex      Int       @default(0)    // Порядок отображения
-  
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  orderIndex  Int     @default(0) // Порядок отображения
+
   // Плановые даты
-  plannedStart    DateTime
-  plannedEnd      DateTime
-  
+  plannedStart DateTime
+  plannedEnd   DateTime
+
   // Фактические даты
-  actualStart     DateTime?
-  actualEnd       DateTime?
-  
+  actualStart DateTime?
+  actualEnd   DateTime?
+
   // Прогресс
-  progress        Int       @default(0)    // 0-100%
-  status          WorkStageStatus @default(NOT_STARTED)
-  
+  progress Int             @default(0) // 0-100%
+  status   WorkStageStatus @default(NOT_STARTED)
+
   // Цвет для отображения на графике
-  color           String    @default("#3B82F6")
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  color String @default("#3B82F6")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  projectId       String
-  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   // Ответственный за этап
-  responsibleId   String?
-  responsible     User?     @relation("WorkStageResponsible", fields: [responsibleId], references: [id])
-  
+  responsibleId String?
+  responsible   User?   @relation("WorkStageResponsible", fields: [responsibleId], references: [id])
+
   // Зависимости (этот этап зависит от других)
-  dependsOn       WorkStageDependency[] @relation("DependentStage")
-  dependents      WorkStageDependency[] @relation("RequiredStage")
-  
+  dependsOn  WorkStageDependency[] @relation("DependentStage")
+  dependents WorkStageDependency[] @relation("RequiredStage")
+
   // Чек-лист этапа
-  checklist       ChecklistItem[]
-  
+  checklist ChecklistItem[]
+
   // Фото-отчёты
-  photos          StagePhoto[]
-  
-  companyId       String?
-  company         Company?  @relation(fields: [companyId], references: [id])
+  photos StagePhoto[]
+
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@index([projectId])
   @@index([companyId])
@@ -562,22 +580,22 @@ model WorkStage {
 
 // Пункт чек-листа для этапа работ
 model ChecklistItem {
-  id              String    @id @default(cuid())
-  title           String                          // Название пункта
-  isCompleted     Boolean   @default(false)       // Выполнен ли
-  orderIndex      Int       @default(0)           // Порядок отображения
-  completedAt     DateTime?                       // Когда выполнен
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  title       String // Название пункта
+  isCompleted Boolean   @default(false) // Выполнен ли
+  orderIndex  Int       @default(0) // Порядок отображения
+  completedAt DateTime? // Когда выполнен
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Связь с этапом работ
-  stageId         String
-  stage           WorkStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  
+  stageId String
+  stage   WorkStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
   // Кто выполнил
-  completedById   String?
-  completedBy     User?     @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
+  completedById String?
+  completedBy   User?   @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
 
   @@index([stageId])
   @@index([isCompleted])
@@ -585,59 +603,59 @@ model ChecklistItem {
 
 // Фото-отчёт для этапа работ
 model StagePhoto {
-  id              String    @id @default(cuid())
-  filename        String                          // Имя файла на сервере
-  originalName    String                          // Оригинальное имя файла
-  description     String?                         // Описание/комментарий к фото
-  mimeType        String    @default("image/jpeg")
-  size            Int       @default(0)           // Размер в байтах
-  
-  createdAt       DateTime  @default(now())
+  id           String  @id @default(cuid())
+  filename     String // Имя файла на сервере
+  originalName String // Оригинальное имя файла
+  description  String? // Описание/комментарий к фото
+  mimeType     String  @default("image/jpeg")
+  size         Int     @default(0) // Размер в байтах
+
+  createdAt DateTime @default(now())
 
   // Связь с этапом работ
-  stageId         String
-  stage           WorkStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  
+  stageId String
+  stage   WorkStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
   // Кто загрузил
-  uploadedById    String
-  uploadedBy      User      @relation("StagePhotoUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById String
+  uploadedBy   User   @relation("StagePhotoUploadedBy", fields: [uploadedById], references: [id])
 
   @@index([stageId])
   @@index([createdAt])
 }
 
 model WorkStageDependency {
-  id              String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Зависимый этап (который ждёт)
-  stageId         String
-  stage           WorkStage @relation("DependentStage", fields: [stageId], references: [id], onDelete: Cascade)
-  
+  stageId String
+  stage   WorkStage @relation("DependentStage", fields: [stageId], references: [id], onDelete: Cascade)
+
   // Требуемый этап (от которого зависит)
-  dependsOnId     String
-  dependsOn       WorkStage @relation("RequiredStage", fields: [dependsOnId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime  @default(now())
+  dependsOnId String
+  dependsOn   WorkStage @relation("RequiredStage", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
 
   @@unique([stageId, dependsOnId])
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  title     String
-  message   String
-  type      NotificationType
-  isRead    Boolean          @default(false)
+  id         String           @id @default(cuid())
+  title      String
+  message    String
+  type       NotificationType
+  isRead     Boolean          @default(false)
   actionType String?
   actionId   String?
   projectId  String?
-  createdAt DateTime         @default(now())
+  createdAt  DateTime         @default(now())
 
-  userId String
-  user   User @relation(fields: [userId], references: [id])
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   companyId String?
-  company Company? @relation(fields: [companyId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
   @@index([userId, isRead])
@@ -646,41 +664,41 @@ model Notification {
 
 // Настройки уведомлений компании
 model NotificationSettings {
-  id                    String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Дедлайны этапов
-  deadlineReminderDays  Int      @default(3)        // За сколько дней напоминать
-  deadlineReminderEnabled Boolean @default(true)    // Включено ли
-  
+  deadlineReminderDays    Int     @default(3) // За сколько дней напоминать
+  deadlineReminderEnabled Boolean @default(true) // Включено ли
+
   // Просроченные этапы
-  overdueNotifyEnabled  Boolean  @default(true)     // Уведомлять о просрочке
-  overdueNotifyManager  Boolean  @default(true)     // Уведомлять руководителя
-  
+  overdueNotifyEnabled Boolean @default(true) // Уведомлять о просрочке
+  overdueNotifyManager Boolean @default(true) // Уведомлять руководителя
+
   // Бюджет
-  budgetWarningPercent  Int      @default(80)       // При каком % расхода предупреждать
-  budgetWarningEnabled  Boolean  @default(true)     // Включено ли
-  
+  budgetWarningPercent Int     @default(80) // При каком % расхода предупреждать
+  budgetWarningEnabled Boolean @default(true) // Включено ли
+
   // Счета
-  invoiceOverdueEnabled Boolean  @default(true)     // Уведомлять о просроченных счетах
-  
+  invoiceOverdueEnabled Boolean @default(true) // Уведомлять о просроченных счетах
+
   // Время последней проверки (для предотвращения дублирования)
-  lastCheckAt           DateTime?
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
-  companyId             String   @unique
-  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lastCheckAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model NumberingRule {
-  id          String   @id @default(cuid())
-  name        String
-  pattern     String
-  counter     Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  pattern   String
+  counter   Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
@@ -725,11 +743,11 @@ enum TaskStatus {
 }
 
 enum WorkStageStatus {
-  NOT_STARTED   // Не начат
-  IN_PROGRESS   // В работе
-  PAUSED        // Приостановлен
-  COMPLETED     // Завершён
-  DELAYED       // Задерживается
+  NOT_STARTED // Не начат
+  IN_PROGRESS // В работе
+  PAUSED // Приостановлен
+  COMPLETED // Завершён
+  DELAYED // Задерживается
 }
 
 enum TaskPriority {
@@ -772,11 +790,12 @@ enum NotificationType {
   WARNING
   ERROR
   SUCCESS
-  DEADLINE_REMINDER    // Напоминание о дедлайне
-  DEADLINE_OVERDUE     // Просроченный срок
-  BUDGET_WARNING       // Предупреждение о бюджете
-  INVOICE_OVERDUE      // Просроченный счёт
+  DEADLINE_REMINDER // Напоминание о дедлайне
+  DEADLINE_OVERDUE // Просроченный срок
+  BUDGET_WARNING // Предупреждение о бюджете
+  INVOICE_OVERDUE // Просроченный счёт
 }
+
 // Новые enum'ы для улучшенной системы согласований
 enum ApprovalPriority {
   LOW
@@ -798,11 +817,11 @@ model ApprovalComment {
   content   String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   approvalId String
   approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
-  userId String
-  user   User @relation("ApprovalComments", fields: [userId], references: [id])
+  userId     String
+  user       User     @relation("ApprovalComments", fields: [userId], references: [id])
 }
 
 // Вложения к согласованию
@@ -813,47 +832,47 @@ model ApprovalAttachment {
   fileSize  Int
   mimeType  String
   createdAt DateTime @default(now())
-  
-  approvalId String
-  approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+
+  approvalId   String
+  approval     Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
   uploadedById String
-  uploadedBy   User @relation("ApprovalAttachments", fields: [uploadedById], references: [id])
+  uploadedBy   User     @relation("ApprovalAttachments", fields: [uploadedById], references: [id])
 }
 
 // История изменений согласования
 model ApprovalHistory {
   id        String   @id @default(cuid())
-  action    String   // "created", "approved", "rejected", "commented", etc.
-  changes   Json?    // Детали изменений
+  action    String // "created", "approved", "rejected", "commented", etc.
+  changes   Json? // Детали изменений
   createdAt DateTime @default(now())
-  
+
   approvalId String
   approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
-  userId String
-  user   User @relation("ApprovalHistory", fields: [userId], references: [id])
+  userId     String
+  user       User     @relation("ApprovalHistory", fields: [userId], references: [id])
 }
 
 model Estimate {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  total       Decimal  @default(0) @db.Decimal(15, 2)
-  totalCost   Decimal  @default(0) @db.Decimal(15, 2)
-  profit      Decimal  @default(0) @db.Decimal(15, 2)
-  vatEnabled  Boolean  @default(false)
-  vatRate     Decimal  @default(20) @db.Decimal(5, 2)
-  vatAmount   Decimal  @default(0) @db.Decimal(15, 2)
-  totalWithVat Decimal @default(0) @db.Decimal(15, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  total        Decimal  @default(0) @db.Decimal(15, 2)
+  totalCost    Decimal  @default(0) @db.Decimal(15, 2)
+  profit       Decimal  @default(0) @db.Decimal(15, 2)
+  vatEnabled   Boolean  @default(false)
+  vatRate      Decimal  @default(20) @db.Decimal(5, 2)
+  vatAmount    Decimal  @default(0) @db.Decimal(15, 2)
+  totalWithVat Decimal  @default(0) @db.Decimal(15, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creatorId String
-  creator   User @relation("EstimateCreator", fields: [creatorId], references: [id])
+  creator   User           @relation("EstimateCreator", fields: [creatorId], references: [id])
   companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  company   Company?       @relation(fields: [companyId], references: [id])
   items     EstimateItem[]
 
   @@index([companyId])
@@ -865,7 +884,7 @@ model EstimateItem {
   id          String   @id @default(cuid())
   name        String
   description String?
-  notes       String?                          // Комментарий к позиции сметы
+  notes       String? // Комментарий к позиции сметы
   quantity    Decimal  @default(1) @db.Decimal(15, 2)
   unit        String   @default("шт")
   unitPrice   Decimal  @default(0) @db.Decimal(15, 2)
@@ -878,11 +897,11 @@ model EstimateItem {
   // Relations
   estimateId String
   estimate   Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
-  
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
+
   // Расходы, привязанные к этой позиции сметы
-  finances   Finance[]
+  finances Finance[]
 
   @@index([companyId])
   @@index([estimateId])

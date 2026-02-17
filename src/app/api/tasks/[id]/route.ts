@@ -36,10 +36,25 @@ export async function GET(
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
-    return NextResponse.json(task)
+    // Загружаем подзадачи отдельно, чтобы не ломать запрос, если таблица еще не создана
+    let subtasks = []
+    try {
+      subtasks = await prisma.taskSubtask.findMany({
+        where: { taskId: params.id },
+        orderBy: { orderIndex: 'asc' }
+      })
+    } catch (subtaskError) {
+      console.error('Error fetching subtasks (non-critical):', subtaskError)
+      // Игнорируем ошибку подзадач, продолжаем работу
+    }
+
+    return NextResponse.json({ ...task, subtasks })
   } catch (error) {
     console.error('Error fetching task:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 })
   }
 }
 
