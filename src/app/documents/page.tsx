@@ -188,6 +188,17 @@ function DocumentsPageContent() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
   }
 
+  const getDownloadTitle = (doc: Document) => {
+    if (doc.category === 'UPD') return 'Скачать Excel'
+    if (
+      doc.mimeType?.includes('word') ||
+      doc.fileName?.toLowerCase().endsWith('.docx')
+    ) {
+      return 'Скачать Word'
+    }
+    return 'Скачать файл'
+  }
+
   const getFileType = (mimeType: string) => {
     if (mimeType.includes('pdf')) return 'PDF'
     if (mimeType.includes('image')) return 'IMG'
@@ -431,7 +442,7 @@ function DocumentsPageContent() {
                         <button 
                           onClick={() => handleDownload(doc.id, doc.fileName)}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded disabled:opacity-40" 
-                          title="Скачать Excel"
+                          title={getDownloadTitle(doc)}
                           disabled={doc.fileSize === 0 && !doc.lastExportedAt}
                         >
                           <Download className="h-4 w-4" />
