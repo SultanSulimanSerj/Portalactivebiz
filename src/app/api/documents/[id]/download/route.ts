@@ -3,7 +3,7 @@ import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
-import { getSignedUrl, getFileBuffer } from '@/lib/storage'
+import { getFileBuffer } from '@/lib/storage'
 import { inspectXlsxBuffer } from '@/lib/document-renderer/xlsx-patcher'
 
 const EXPECTED_UPD_MERGE_COUNT = 338
@@ -140,8 +140,8 @@ export async function GET(
       document.category === 'UPD' && !wantPdf && filePath.endsWith('.xlsx')
 
     if (isMinIOKey(filePath)) {
+      const fileBuffer = await getFileBuffer(filePath)
       if (isUpdXlsx) {
-        const fileBuffer = await getFileBuffer(filePath)
         return validateAndServeUpdXlsx(fileBuffer, fileName || 'document.xlsx', resolvedMime, {
           documentId: params.id,
           filePath,
@@ -150,11 +150,7 @@ export async function GET(
         })
       }
 
-      const downloadUrl = await getSignedUrl(filePath, 3600)
-      const response = NextResponse.redirect(downloadUrl)
-      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
-      response.headers.set('Pragma', 'no-cache')
-      return response
+      return fileResponse(fileBuffer, fileName || 'document', resolvedMime)
     }
 
     const uploadsDir = join(process.cwd(), 'uploads')

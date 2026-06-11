@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { verifyApprovalCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
-import { getSignedUrl } from '@/lib/storage'
+import { getFileBuffer } from '@/lib/storage'
 
 // GET /api/approvals/[id]/attachments/[attachmentId]/download - Скачать файл
 export async function GET(
@@ -51,14 +51,20 @@ export async function GET(
     }
 
     try {
-      // Получаем подписанный URL для скачивания файла
-      const downloadUrl = await getSignedUrl(attachment.filePath, 3600) // 1 час
-      
-      // Перенаправляем на URL для скачивания
-      return NextResponse.redirect(downloadUrl)
+      const fileBuffer = await getFileBuffer(attachment.filePath)
+      return new NextResponse(fileBuffer as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          'Content-Type': attachment.mimeType || 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(attachment.fileName || 'attachment')}"`,
+          'Content-Length': fileBuffer.length.toString(),
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      })
     } catch (storageError) {
-      console.error('Error generating download URL:', storageError)
-      return NextResponse.json({ error: 'Failed to generate download URL' }, { status: 500 })
+      console.error('Error reading attachment file:', storageError)
+      return NextResponse.json({ error: 'Failed to download file' }, { status: 500 })
     }
 
   } catch (error) {
