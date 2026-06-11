@@ -63,6 +63,15 @@ function parseRuDate(dateStr: string) {
   return { day, month, year, monthName: MONTHS_GENITIVE[month - 1] || '' }
 }
 
+/** «Счёт на оплату № 1 от 11.06.2026» → текст и дата для разных ячеек формы */
+function splitPaymentDocText(text: string): { main: string; date?: string } {
+  const match = text.match(/^(.+?)\s+от\s+(\d{2}\.\d{2}\.\d{4})\s*$/)
+  if (match) {
+    return { main: match[1].trim(), date: match[2] }
+  }
+  return { main: text.trim() }
+}
+
 function assign(assignments: XlsxCellAssignment[], address: string, value: string | number | null) {
   assignments.push({ address, value })
 }
@@ -150,8 +159,13 @@ export function buildUpdXlsxPatchPlan(data: UpdDocumentData): UpdXlsxPatchPlan {
     data.paymentDocText ||
     (data.contractNumber
       ? `Договор № ${data.contractNumber}${data.contractDate ? ` от ${data.contractDate}` : ''}`
-      : '№ —')
-  assign(assignments, UPD_CELLS.paymentDoc, paymentText)
+      : '—')
+  const paymentParts = splitPaymentDocText(paymentText)
+  assign(assignments, UPD_CELLS.paymentDocLabel, null)
+  assign(assignments, UPD_CELLS.paymentDoc, paymentParts.main)
+  if (paymentParts.date) {
+    assign(assignments, UPD_CELLS.paymentDocDate, paymentParts.date)
+  }
 
   assign(assignments, UPD_CELLS.buyerName, buyerLabel)
   assign(assignments, UPD_CELLS.buyerAddress, data.buyer.address || '—')

@@ -9,8 +9,12 @@ export const UPD_CELLS = {
   sellerInnKpp: 'BA6',
   shipper: 'BA7',
   consignee: 'BA8',
-  /** Текст после «№» (merge BD9:CG9), не в BA9 — там только символ «№» */
+  /** Символ «№» в шаблоне (merge BA9:BC9) — очищаем, иначе дублируется и обрезает текст */
+  paymentDocLabel: 'BA9',
+  /** Номер/название платёжного документа (merge BD9:CG9) */
   paymentDoc: 'BD9',
+  /** Дата платёжного документа после подписи «от» (merge CH9:CJ9, ячейка CI9) */
+  paymentDocDate: 'CI9',
   buyerName: 'BA19',
   buyerAddress: 'BA20',
   buyerInnKpp: 'BA21',

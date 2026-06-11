@@ -11,11 +11,12 @@ function readXlsxCell(buffer: Buffer, address: string): string | null {
   const sstXml = zip.file('xl/sharedStrings.xml')?.asText()
   if (!sheet || !sstXml) return null
 
-  const cellMatch = sheet.match(
-    new RegExp(`<c r="${address}"([^>]*)>([\\s\\S]*?)</c>|<c r="${address}"([^>]*)/>`)
-  )
+  const selfClosing = sheet.match(new RegExp(`<c r="${address}"[^>]*/>`))
+  if (selfClosing) return ''
+
+  const cellMatch = sheet.match(new RegExp(`<c r="${address}"([^>]*)>([\\s\\S]*?)</c>`))
   if (!cellMatch) return null
-  const attrs = cellMatch[1] ?? cellMatch[3] ?? ''
+  const attrs = cellMatch[1] ?? ''
   const inner = cellMatch[2]
   if (!inner) return ''
   const valueMatch = /<v>([^<]*)<\/v>/.exec(inner)
@@ -122,12 +123,13 @@ async function main() {
   const templateMetrics = inspectXlsxBuffer(fs.readFileSync(templatePath))
   assert(generatedMetrics.mergeCount === templateMetrics.mergeCount, 'merge count совпадает с шаблоном')
 
-  assert(readXlsxCell(generated, 'BA9') === '№', 'в BA9 остаётся символ «№»')
+  assert(readXlsxCell(generated, 'BA9') === '', 'символ «№» в BA9 убран')
   const paymentDoc = readXlsxCell(generated, 'BD9')
   assert(
     paymentDoc != null && paymentDoc.includes('Счёт на оплату № 36'),
     'платёжный документ заполнен в BD9'
   )
+  assert(readXlsxCell(generated, 'CI9') === '27.05.2026', 'дата платёжного документа в CI9')
   assert(readXlsxCell(generated, 'BN55') === '20', 'префикс года в BN55')
   assert(readXlsxCell(generated, 'BR55') === '26', 'суффикс года в BR55 (не полный 2026)')
 
