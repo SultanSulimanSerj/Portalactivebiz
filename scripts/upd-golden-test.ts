@@ -21,9 +21,11 @@ function readXlsxCell(buffer: Buffer, address: string): string | null {
   const valueMatch = /<v>([^<]*)<\/v>/.exec(inner)
   if (!valueMatch) return ''
   if (/\bt="s"/.test(attrs)) {
-    const all = [...sstXml.matchAll(/<si>[\s\S]*?<\/si>/g)]
+    const all = Array.from(sstXml.matchAll(/<si>[\s\S]*?<\/si>/g))
     const si = all[parseInt(valueMatch[1], 10)]?.[0] ?? ''
-    return [...si.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map((m) => m[1]).join('')
+    return Array.from(si.matchAll(/<t[^>]*>([^<]*)<\/t>/g))
+      .map((m) => m[1])
+      .join('')
   }
   return valueMatch[1]
 }
