@@ -48,7 +48,7 @@ export function buildKs3FileName(documentNumber: string, documentDate: string): 
 }
 
 export function buildInvoiceFileName(documentNumber: string, documentDate: string): string {
-  return `Счёт № ${documentNumber} от ${documentDate}.docx`
+  return `Исходящий счет на оплату № ${documentNumber} от ${documentDate}.docx`
 }
 
 export async function exportKs2Content(

@@ -16,6 +16,8 @@
     "test:prefill-upd": "tsx scripts/prefill-upd-invoice-test.ts",
     "test:numbering": "tsx scripts/document-numbering-test.ts",
     "test:counterparty": "tsx scripts/counterparty-lookup-test.ts",
+    "test:invoice-template": "tsx scripts/prepare-invoice-template.ts && tsx scripts/invoice-template-test.ts",
+    "prepare:invoice-template": "tsx scripts/prepare-invoice-template.ts",
     "test:live": "SMOKE_BASE_URL=http://localhost:3000 node scripts/smoke-test.mjs",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",

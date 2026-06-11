@@ -8,6 +8,11 @@ export interface DocumentParty {
   address: string
   directorName?: string
   directorPosition?: string
+  bankName?: string
+  bankBik?: string
+  bankAccount?: string
+  correspondentAccount?: string
+  bankCity?: string
 }
 
 export interface DocumentLineItem {

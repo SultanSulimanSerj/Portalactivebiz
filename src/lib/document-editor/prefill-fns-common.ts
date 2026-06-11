@@ -22,6 +22,10 @@ export interface FnsPrefillProject {
     address?: string | null
     directorName?: string | null
     directorPosition?: string | null
+    bankName?: string | null
+    bankBik?: string | null
+    bankAccount?: string | null
+    correspondentAccount?: string | null
   } | null
   estimates?: EstimateWithItems[]
 }
@@ -39,6 +43,10 @@ export function buildPartiesFromProject(project: FnsPrefillProject): {
       address: project.company?.legalAddress || project.company?.address || '',
       directorName: project.company?.directorName || undefined,
       directorPosition: project.company?.directorPosition || undefined,
+      bankName: project.company?.bankName || undefined,
+      bankBik: project.company?.bankBik || undefined,
+      bankAccount: project.company?.bankAccount || undefined,
+      correspondentAccount: project.company?.correspondentAccount || undefined,
     },
     buyer: {
       name: project.clientName || '',
