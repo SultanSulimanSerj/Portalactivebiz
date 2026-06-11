@@ -3,10 +3,74 @@ import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
-import { getSignedUrl } from '@/lib/storage'
+import { getSignedUrl, getFileBuffer } from '@/lib/storage'
+import { inspectXlsxBuffer } from '@/lib/document-renderer/xlsx-patcher'
+
+const EXPECTED_UPD_MERGE_COUNT = 338
 
 function isMinIOKey(filePath: string): boolean {
   return filePath.startsWith('documents/') || filePath.startsWith('stages/') || filePath.startsWith('approvals/')
+}
+
+function resolveMimeType(filePath: string, mimeType: string | null): string {
+  if (filePath.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+  if (filePath.endsWith('.pdf')) {
+    return 'application/pdf'
+  }
+  if (filePath.endsWith('.html')) {
+    return 'text/html'
+  }
+  if (filePath.endsWith('.xlsx')) {
+    return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  }
+  return mimeType || 'application/octet-stream'
+}
+
+function fileResponse(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType: string
+): NextResponse {
+  return new NextResponse(fileBuffer as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      'Content-Type': mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName || 'document')}"`,
+      'Content-Length': fileBuffer.length.toString(),
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      Pragma: 'no-cache',
+    },
+  })
+}
+
+async function validateAndServeUpdXlsx(
+  fileBuffer: Buffer,
+  fileName: string,
+  mimeType: string,
+  context: {
+    documentId: string
+    filePath: string
+    versionParam: string | null
+    isLegacy: boolean
+  }
+): Promise<NextResponse> {
+  const metrics = inspectXlsxBuffer(fileBuffer)
+
+  if (metrics.mergeCount !== EXPECTED_UPD_MERGE_COUNT) {
+    return NextResponse.json(
+      {
+        error:
+          'Файл УПД устарел (повреждённая структура Excel). Нажмите «Сформировать» в редакторе и скачайте заново.',
+        mergeCount: metrics.mergeCount,
+        expectedMergeCount: EXPECTED_UPD_MERGE_COUNT,
+      },
+      { status: 409 }
+    )
+  }
+
+  return fileResponse(fileBuffer, fileName, mimeType)
 }
 
 export async function GET(
@@ -27,52 +91,93 @@ export async function GET(
         id: params.id,
         OR: [
           { companyId: user.companyId },
-          { companyId: null, creator: { companyId: user.companyId } }
-        ]
-      }
+          { companyId: null, creator: { companyId: user.companyId } },
+        ],
+      },
     })
 
     if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    if (isMinIOKey(document.filePath)) {
-      const downloadUrl = await getSignedUrl(document.filePath, 3600)
-      return NextResponse.redirect(downloadUrl)
+    const versionParam = request.nextUrl.searchParams.get('version')
+    const formatParam = request.nextUrl.searchParams.get('format')
+    const wantPdf = formatParam === 'pdf'
+
+    let filePath = wantPdf ? document.pdfFilePath : document.filePath
+    let fileName = wantPdf ? document.pdfFileName : document.fileName
+    let mimeType = wantPdf ? 'application/pdf' : document.mimeType
+    let fileSize = wantPdf ? document.pdfFileSize : document.fileSize
+
+    if (versionParam) {
+      const versionNum = parseInt(versionParam, 10)
+      if (!isNaN(versionNum)) {
+        const versionRecord =
+          versionNum === document.version
+            ? null
+            : await prisma.documentVersion.findFirst({
+                where: { documentId: params.id, version: versionNum },
+              })
+        if (versionRecord) {
+          filePath = wantPdf ? versionRecord.pdfFilePath : versionRecord.filePath
+          fileName = wantPdf ? versionRecord.pdfFileName : versionRecord.fileName
+          mimeType = wantPdf ? 'application/pdf' : versionRecord.mimeType
+          fileSize = wantPdf ? versionRecord.pdfFileSize : versionRecord.fileSize
+        }
+      }
     }
 
-    const uploadsDir = join(process.cwd(), 'uploads')
-    const filePath = join(uploadsDir, document.filePath)
-    try {
-      const fileBuffer = await readFile(filePath)
-      let mimeType = document.mimeType
-      if (document.filePath.endsWith('.docx')) {
-        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      } else if (document.filePath.endsWith('.pdf')) {
-        mimeType = 'application/pdf'
-      } else if (document.filePath.endsWith('.html')) {
-        mimeType = 'text/html'
-      }
-      return new NextResponse(fileBuffer as any, {
-        status: 200,
-        headers: {
-          'Content-Type': mimeType,
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(document.fileName)}"`,
-          'Content-Length': fileBuffer.length.toString()
-        }
-      })
-    } catch (fileError) {
-      console.error('Error reading file:', fileError)
+    if (!filePath || filePath === 'draft-placeholder.txt' || !fileSize) {
+      const label = wantPdf ? 'PDF' : 'файл'
       return NextResponse.json(
-        { error: 'File not found or cannot be read' },
+        { error: `${label} ещё не сформирован. Нажмите «Сформировать» в редакторе.` },
         { status: 404 }
       )
     }
+
+    const resolvedMime = resolveMimeType(filePath, mimeType)
+    const isUpdXlsx =
+      document.category === 'UPD' && !wantPdf && filePath.endsWith('.xlsx')
+
+    if (isMinIOKey(filePath)) {
+      if (isUpdXlsx) {
+        const fileBuffer = await getFileBuffer(filePath)
+        return validateAndServeUpdXlsx(fileBuffer, fileName || 'document.xlsx', resolvedMime, {
+          documentId: params.id,
+          filePath,
+          versionParam,
+          isLegacy: !document.contentJson,
+        })
+      }
+
+      const downloadUrl = await getSignedUrl(filePath, 3600)
+      const response = NextResponse.redirect(downloadUrl)
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+      response.headers.set('Pragma', 'no-cache')
+      return response
+    }
+
+    const uploadsDir = join(process.cwd(), 'uploads')
+    const localPath = join(uploadsDir, filePath)
+    try {
+      const fileBuffer = await readFile(localPath)
+
+      if (isUpdXlsx) {
+        return validateAndServeUpdXlsx(fileBuffer, fileName || 'document.xlsx', resolvedMime, {
+          documentId: params.id,
+          filePath,
+          versionParam,
+          isLegacy: !document.contentJson,
+        })
+      }
+
+      return fileResponse(fileBuffer, fileName || 'document', resolvedMime)
+    } catch (fileError) {
+      console.error('Error reading file:', fileError)
+      return NextResponse.json({ error: 'File not found or cannot be read' }, { status: 404 })
+    }
   } catch (error) {
     console.error('Error downloading document:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

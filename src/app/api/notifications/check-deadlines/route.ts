@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authenticateUser } from '@/lib/auth-api'
 import { generateId } from '@/lib/id-generator'
 
 // API для проверки дедлайнов и генерации уведомлений
@@ -7,14 +8,24 @@ import { generateId } from '@/lib/id-generator'
 
 export async function POST(request: NextRequest) {
   try {
-    // Опционально: проверка секретного ключа для cron
     const { searchParams } = new URL(request.url)
     const secret = searchParams.get('secret')
     const cronSecret = process.env.CRON_SECRET
-    
-    // Если установлен CRON_SECRET, проверяем его
-    if (cronSecret && secret !== cronSecret) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const headerSecret = request.headers.get('x-cron-secret')
+    const isCronAuthorized = !!cronSecret && (secret === cronSecret || headerSecret === cronSecret)
+
+    let user: Awaited<ReturnType<typeof authenticateUser>> = null
+    if (!isCronAuthorized) {
+      if (cronSecret) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      user = await authenticateUser(request)
+      if (!user || (user.role !== 'OWNER' && user.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      if (!user.companyId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const results = {
@@ -24,9 +35,10 @@ export async function POST(request: NextRequest) {
       overdueInvoices: 0
     }
 
-    // Получаем все компании с их настройками
     const companies = await prisma.company.findMany({
-      where: { isActive: true },
+      where: isCronAuthorized
+        ? { isActive: true }
+        : { isActive: true, id: user!.companyId! },
       include: {
         notificationSettings: true
       }

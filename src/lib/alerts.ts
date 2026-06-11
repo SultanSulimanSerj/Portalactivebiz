@@ -1,5 +1,6 @@
 import { logger } from './logger'
 import { performanceMonitor } from './monitoring'
+import { sendMail } from './mail'
 
 export interface AlertConfig {
   enabled: boolean
@@ -66,8 +67,25 @@ class AlertManager {
   }
 
   private async sendEmailAlert(alert: Alert) {
-    // TODO: Implement email sending (nodemailer, sendgrid, etc.)
-    console.log(`Email alert sent: ${alert.message}`)
+    if (!this.config.email) return
+
+    const sent = await sendMail({
+      to: this.config.email,
+      subject: `[Manexa ${alert.severity.toUpperCase()}] ${alert.type}`,
+      text: [
+        alert.message,
+        '',
+        `Severity: ${alert.severity}`,
+        `Time: ${alert.timestamp.toISOString()}`,
+        alert.context ? `Context: ${JSON.stringify(alert.context)}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    })
+
+    if (!sent) {
+      console.warn('Email alert skipped: SMTP not configured')
+    }
   }
 
   private async sendWebhookAlert(alert: Alert) {

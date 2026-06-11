@@ -4,6 +4,7 @@ import { canUserAccessProject } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
 import { UserRole } from '@/lib/permissions'
+import { notifyChatMentions } from '@/lib/chat-mentions'
 
 export async function GET(
   request: NextRequest,
@@ -84,6 +85,7 @@ export async function POST(
         content: content.trim(),
         projectId: params.id,
         userId: user.id,
+        companyId: user.companyId || null,
         updatedAt: new Date()
       },
       include: {
@@ -109,48 +111,27 @@ export async function POST(
       // Не прерываем выполнение, если WebSocket не работает
     }
 
-    // Отправляем уведомления упомянутым пользователям
-    if (mentions && mentions.length > 0) {
-      try {
-        // Получаем проект для названия
-        const project = await prisma.project.findUnique({
-          where: { id: params.id },
-          select: { name: true }
-        })
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id: params.id },
+        select: { name: true },
+      })
 
-        // Находим пользователей по именам
-        const mentionedUsers = await prisma.user.findMany({
-          where: {
-            name: { in: mentions },
-            companyId: user.companyId,
-            id: { not: user.id } // Не отправляем уведомление самому себе
-          },
-          select: { id: true, name: true }
-        })
-
-        // Создаём уведомления для упомянутых пользователей
-        if (mentionedUsers.length > 0) {
-          await Promise.all(
-            mentionedUsers.map(mentionedUser =>
-              prisma.notification.create({
-                data: {
-                  userId: mentionedUser.id,
-                  title: 'Вас упомянули в чате',
-                  message: `${user.name} упомянул вас в проекте "${project?.name}": ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
-                  type: 'INFO',
-                  projectId: params.id,
-                  actionType: 'project',
-                  actionId: params.id
-                }
-              })
-            )
-          )
-          console.log(`🔔 Отправлены уведомления об упоминании для ${mentionedUsers.length} пользователей`)
-        }
-      } catch (notificationError) {
-        console.error('Ошибка отправки уведомлений об упоминании:', notificationError)
-        // Не прерываем выполнение
+      const mentionNotifications = await notifyChatMentions({
+        content: content.trim(),
+        senderId: user.id,
+        senderName: user.name || 'Пользователь',
+        companyId: user.companyId,
+        projectId: params.id,
+        projectName: project?.name || null,
+        messageId: message.id,
+        mentionNames: mentions,
+      })
+      if (mentionNotifications.length > 0) {
+        console.log(`🔔 Отправлены уведомления об упоминании для ${mentionNotifications.length} пользователей`)
       }
+    } catch (notificationError) {
+      console.error('Ошибка отправки уведомлений об упоминании:', notificationError)
     }
 
     return NextResponse.json(message, { status: 201 })

@@ -1,34 +1,30 @@
 /**
- * API для работы с системными шаблонами документов
- * GET /api/templates - получение списка системных шаблонов
- * POST /api/templates - НЕ ПОДДЕРЖИВАЕТСЯ (только системные шаблоны)
+ * API для работы с шаблонами документов
+ * GET /api/templates - системные + пользовательские шаблоны компании
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/auth-middleware'
+import { prisma } from '@/lib/prisma'
 import { getAllSystemTemplates, getSystemTemplatesByCategory } from '@/lib/system-templates'
 
 export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canViewAllDocuments')
 
-    if (!allowed) {
+    if (!allowed || !user) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
 
-    // Получаем системные шаблоны
-    let templates = getAllSystemTemplates()
-
-    // Фильтруем по категории если указана
+    let systemTemplates = getAllSystemTemplates()
     if (category) {
-      templates = getSystemTemplatesByCategory(category)
+      systemTemplates = getSystemTemplatesByCategory(category)
     }
 
-    // Преобразуем в формат, совместимый с фронтендом
-    const formattedTemplates = templates.map(template => ({
+    const formattedSystem = systemTemplates.map((template) => ({
       id: template.id,
       name: template.name,
       description: template.description,
@@ -40,34 +36,65 @@ export async function GET(request: NextRequest) {
       autoNumber: template.autoNumber,
       numberFormat: template.numberFormat,
       autoFillSources: template.autoFillSources,
-      // Системные шаблоны всегда активны и публичны
       isActive: true,
       isPublic: true,
-      companyId: null, // Системные шаблоны
-      creatorId: null, // Системные шаблоны
+      companyId: null,
+      creatorId: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      // Дополнительные поля для совместимости
       requiresApproval: false,
-      _count: {
-        documents: 0 // Пока не реализовано
-      }
+      _count: { documents: 0 },
     }))
 
-    console.log('[DEBUG] System templates found:', formattedTemplates.length)
-    console.log('[DEBUG] Templates:', formattedTemplates.map(t => ({ id: t.id, name: t.name, category: t.category })))
+    const dbTemplatesFormatted =
+      user.companyId
+        ? (
+            await prisma.documentTemplate.findMany({
+              where: { companyId: user.companyId, isActive: true },
+              include: { _count: { select: { documents: true } } },
+              orderBy: { updatedAt: 'desc' },
+            })
+          )
+            .filter((t) => !category || category === 'OTHER')
+            .map((template) => ({
+              id: template.id,
+              name: template.name,
+              description: template.description || '',
+              category: 'OTHER',
+              type: 'CUSTOM',
+              fileType: 'HTML',
+              content: template.content,
+              variables: template.variables,
+              autoNumber: false,
+              numberFormat: '',
+              autoFillSources: template.variables,
+              isActive: template.isActive,
+              isPublic: false,
+              companyId: template.companyId,
+              creatorId: null,
+              createdAt: template.createdAt.toISOString(),
+              updatedAt: template.updatedAt.toISOString(),
+              requiresApproval: false,
+              _count: { documents: template._count.documents },
+            }))
+        : []
 
-    return NextResponse.json({ templates: formattedTemplates }, { status: 200 })
+    return NextResponse.json(
+      { templates: [...formattedSystem, ...dbTemplatesFormatted] },
+      { status: 200 }
+    )
   } catch (error) {
-    console.error('Error fetching system templates:', error)
+    console.error('Error fetching templates:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// Убираем возможность создания пользовательских шаблонов
-export async function POST(request: NextRequest) {
+export async function POST() {
   return NextResponse.json(
-    { error: 'Создание пользовательских шаблонов не поддерживается. Используйте только системные шаблоны.' },
+    {
+      error:
+        'Создание пользовательских шаблонов через этот endpoint не поддерживается. Используйте системные шаблоны.',
+    },
     { status: 405 }
   )
 }

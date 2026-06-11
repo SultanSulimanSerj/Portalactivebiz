@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/layout'
 import { PermissionGuard } from '@/components/permission-guard'
+import { ErrorBanner } from '@/components/ui/error-banner'
 import { 
   FolderOpen, 
   FileText, 
@@ -39,6 +40,7 @@ export default function Dashboard() {
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [activityLoading, setActivityLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchDashboardData()
@@ -47,11 +49,17 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      setError(null)
       const [projectsRes, tasksRes, documentsRes] = await Promise.all([
         fetch('/api/projects'),
         fetch('/api/tasks'),
         fetch('/api/documents')
       ])
+
+      if (!projectsRes.ok || !tasksRes.ok || !documentsRes.ok) {
+        setError('Не удалось загрузить данные панели управления')
+        return
+      }
 
       const projects = await projectsRes.json()
       const tasks = await tasksRes.json()
@@ -63,8 +71,8 @@ export default function Dashboard() {
         totalTasks: tasks.tasks?.length || 0,
         totalDocuments: documents.documents?.length || 0
       })
-    } catch (err) {
-      console.error('Error:', err)
+    } catch {
+      setError('Ошибка при загрузке данных панели управления')
     } finally {
       setLoading(false)
     }
@@ -171,7 +179,7 @@ export default function Dashboard() {
       title: 'Создать проект',
       description: 'Добавить новый проект в систему',
       icon: FolderOpen,
-      href: '/projects/create',
+      href: '/projects?create=1',
       color: 'bg-blue-50 text-blue-600',
       permission: 'canCreateProjects'
     },
@@ -179,7 +187,7 @@ export default function Dashboard() {
       title: 'Добавить задачу',
       description: 'Создать новую задачу',
       icon: Flag,
-      href: '/tasks/create',
+      href: '/tasks?create=1',
       color: 'bg-green-50 text-green-600',
       permission: 'canCreateTasks'
     },
@@ -217,6 +225,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-6">
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Панель управления</h1>

@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { PermissionButton } from '@/components/permission-guard'
 import { useSocket } from '@/contexts/SocketContext'
 import { useSession } from 'next-auth/react'
+import { extractMentionNames } from '@/lib/mention-utils'
 
 interface ProjectDetail {
   id: string
@@ -169,20 +170,26 @@ export default function ProjectDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.id])
 
+  const appendChatMessage = (message: Message) => {
+    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]))
+  }
+
   // WebSocket для реального времени чата
   useEffect(() => {
-    if (!socket || !params?.id) return
+    if (!socket || !isConnected || !params?.id) return
 
     const projectId = params.id as string
 
-    // Присоединяемся к комнате проекта
+    // Присоединяемся к комнате проекта после установки соединения
     socket.emit('join-project', projectId)
 
     // Слушаем новые сообщения
-    socket.on('new-message', (message: Message) => {
-      console.log('📨 Получено новое сообщение через WebSocket:', message)
-      setMessages((prev) => [...prev, message])
-    })
+    const handleNewMessage = (message: Message & { projectId?: string }) => {
+      if (message.projectId && message.projectId !== projectId) return
+      appendChatMessage(message)
+    }
+
+    socket.on('new-message', handleNewMessage)
 
     // Слушаем индикатор печати
     socket.on('user-typing', (data: { userName: string; isTyping: boolean }) => {
@@ -206,10 +213,10 @@ export default function ProjectDetailPage() {
     // Cleanup при размонтировании
     return () => {
       socket.emit('leave-project', projectId)
-      socket.off('new-message')
+      socket.off('new-message', handleNewMessage)
       socket.off('user-typing')
     }
-  }, [socket, params?.id])
+  }, [socket, isConnected, params?.id])
 
   const fetchFinanceStats = async () => {
     try {
@@ -443,13 +450,7 @@ export default function ProjectDetailPage() {
         })
       }
 
-      // Извлекаем упоминания из сообщения
-      const mentionRegex = /@(\w+(?:\s+\w+)?)/g
-      const mentions = []
-      let match
-      while ((match = mentionRegex.exec(newMessage)) !== null) {
-        mentions.push(match[1])
-      }
+      const mentions = extractMentionNames(newMessage)
 
       const response = await fetch(`/api/projects/${params?.id}/messages`, {
         method: 'POST',
@@ -463,9 +464,10 @@ export default function ProjectDetailPage() {
       })
 
       if (response.ok) {
+        const message = await response.json()
+        appendChatMessage(message)
         setNewMessage('')
         setShowMentionSuggestions(false)
-        // Не нужно вызывать fetchMessages - сообщение придёт через WebSocket
       }
     } catch (err) {
       console.error(err)
@@ -750,7 +752,7 @@ export default function ProjectDetailPage() {
           </Link>
 
           <Link 
-            href={`/documents/generate?projectId=${project.id}`}
+            href={`/documents/new?projectId=${project.id}`}
             className="bg-white rounded-lg p-5 border hover:shadow-md transition-shadow"
           >
             <div className="flex items-center gap-3 mb-2">

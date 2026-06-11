@@ -17,6 +17,8 @@ import {
   Loader2
 } from 'lucide-react'
 import Layout from '@/components/layout'
+import { PermissionGuard } from '@/components/permission-guard'
+import { ErrorBanner } from '@/components/ui/error-banner'
 
 interface ReportStats {
   totalProjects: number
@@ -46,33 +48,30 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState<string | null>(null)
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  // Загрузка данных отчетов
   const fetchReportData = async () => {
     try {
       setLoading(true)
-      const token = localStorage.getItem('auth-token')
+      setError(null)
       const params = new URLSearchParams({
         period: selectedPeriod,
         type: selectedType,
         ...(startDate && { startDate }),
-        ...(endDate && { endDate })
+        ...(endDate && { endDate }),
       })
 
-      const response = await fetch(`/api/reports?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await fetch(`/api/reports?${params}`)
 
       if (response.ok) {
         const data = await response.json()
         setStats(data.stats)
       } else {
-        console.error('Failed to fetch report data')
+        const data = await response.json().catch(() => ({}))
+        setError(data.error || 'Не удалось загрузить данные отчётов')
       }
-    } catch (error) {
-      console.error('Error fetching report data:', error)
+    } catch {
+      setError('Ошибка при загрузке данных отчётов')
     } finally {
       setLoading(false)
     }
@@ -82,14 +81,10 @@ export default function ReportsPage() {
   const handleGenerateReport = async (reportId: string) => {
     try {
       setGenerating(reportId)
-      const token = localStorage.getItem('auth-token')
       
       const response = await fetch('/api/reports/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportType: reportId,
           period: selectedPeriod,
@@ -137,13 +132,15 @@ export default function ReportsPage() {
   const handleDownloadReport = async (reportId: string) => {
     try {
       setDownloading(reportId)
-      const token = localStorage.getItem('auth-token')
-      
-      const response = await fetch(`/api/reports/download/${reportId}_${Date.now()}.txt`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const params = new URLSearchParams({
+        period: selectedPeriod,
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate }),
       })
+      
+      const response = await fetch(
+        `/api/reports/download/${reportId}_${Date.now()}.txt?${params}`
+      )
 
       if (response.ok) {
         const blob = await response.blob()
@@ -169,18 +166,12 @@ export default function ReportsPage() {
   // Экспорт всех отчетов
   const handleExportAll = async () => {
     try {
-      const token = localStorage.getItem('auth-token')
-      
-      // Генерируем все типы отчетов
       const reportTypes = ['financial', 'projects', 'users', 'documents']
       
       for (const type of reportTypes) {
         const response = await fetch('/api/reports/generate', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             reportType: type,
             period: selectedPeriod,
@@ -223,13 +214,10 @@ export default function ReportsPage() {
   // Быстрые действия
   const handleQuickAction = async (action: string) => {
     try {
-      const token = localStorage.getItem('auth-token')
-      
       const response = await fetch('/api/reports/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           reportType: action,
@@ -353,7 +341,18 @@ export default function ReportsPage() {
 
   return (
     <Layout>
+      <PermissionGuard
+        permission="canViewReports"
+        fallback={
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-600">У вас нет доступа к разделу отчётов</p>
+          </div>
+        }
+      >
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+        </div>
         {/* Header */}
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -545,6 +544,7 @@ export default function ReportsPage() {
           </Card>
         </div>
       </div>
+      </PermissionGuard>
     </Layout>
   )
 }

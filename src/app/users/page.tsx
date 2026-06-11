@@ -125,7 +125,13 @@ export default function UsersPage() {
         setUsers([result.user, ...users])
         setShowInviteModal(false)
         setInviteData({ name: '', email: '', role: 'USER', position: '' })
-        setSuccess(`Пользователь ${result.user.name} успешно приглашен. Временный пароль: ${result.tempPassword}`)
+        if (result.emailSent) {
+          setSuccess(`Пользователь ${result.user.name} приглашён. Письмо с паролем отправлено на ${result.user.email}.`)
+        } else if (result.tempPassword) {
+          setSuccess(`Пользователь ${result.user.name} приглашён. Временный пароль (dev): ${result.tempPassword}`)
+        } else {
+          setSuccess(`Пользователь ${result.user.name} приглашён.`)
+        }
       } else {
         const errorData = await response.json()
         setError(errorData.error || 'Ошибка приглашения пользователя')
@@ -208,6 +214,14 @@ export default function UsersPage() {
 
   return (
     <Layout>
+      <PermissionGuard
+        permission="canManageUsers"
+        fallback={
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-600">У вас нет доступа к разделу пользователей</p>
+          </div>
+        }
+      >
       <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -508,6 +522,7 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+      </PermissionGuard>
     </Layout>
   )
 }

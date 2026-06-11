@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
-import { authenticateUser } from '@/lib/auth-api'
 
 // Шаблон договора с переменными
 const CONTRACT_TEMPLATE = `<!DOCTYPE html>
@@ -174,9 +174,14 @@ const CONTRACT_TEMPLATE = `<!DOCTYPE html>
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await authenticateUser(request)
-    if (!user || !user.companyId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { allowed, user, error } = await checkPermission(request, 'canEditDocuments')
+
+    if (!allowed || !user?.companyId) {
+      return NextResponse.json({ error: error || 'Unauthorized' }, { status: 403 })
+    }
+
+    if (user.role !== 'OWNER' && user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 })
     }
 
     // Создаем шаблон договора
@@ -191,11 +196,11 @@ export async function POST(request: NextRequest) {
           executor: ['name', 'legalName', 'director', 'inn', 'ogrnip', 'address', 'phone', 'email'],
           client: ['name', 'legalName', 'director', 'inn', 'kpp', 'address', 'phone', 'email'],
           project: ['name', 'description', 'address', 'startDate', 'endDate'],
-          estimate: ['total', 'totalWithVat', 'vatEnabled']
+          estimate: ['total', 'totalWithVat', 'vatEnabled'],
         },
         companyId: user.companyId,
-        isActive: true
-      }
+        isActive: true,
+      },
     })
 
     return NextResponse.json({

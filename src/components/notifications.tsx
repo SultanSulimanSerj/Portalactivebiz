@@ -5,6 +5,12 @@ import { Bell, X, Check, AlertCircle, Info, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSocket } from '@/contexts/SocketContext'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import {
+  playNotificationSound,
+  setupNotificationSoundUnlock,
+  unlockNotificationSound,
+} from '@/lib/notification-sound'
 
 interface Notification {
   id: string
@@ -20,96 +26,43 @@ interface Notification {
 }
 
 export default function Notifications() {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const previousCountRef = useRef<number>(0)
-  const { socket } = useSocket()
+  const isInitialFetchRef = useRef(true)
+  const { socket, isConnected } = useSocket()
   const { data: session } = useSession()
 
-  // Функция для воспроизведения звука
-  const playNotificationSound = () => {
-    try {
-      console.log('🔔 Воспроизведение звука уведомления...')
-      
-      // Создаем аудио контекст
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      
-      // Первый "бип"
-      const oscillator1 = audioContext.createOscillator()
-      const gainNode1 = audioContext.createGain()
-      
-      oscillator1.connect(gainNode1)
-      gainNode1.connect(audioContext.destination)
-      
-      oscillator1.frequency.value = 800
-      oscillator1.type = 'sine'
-      
-      gainNode1.gain.setValueAtTime(0.5, audioContext.currentTime)
-      gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15)
-      
-      oscillator1.start(audioContext.currentTime)
-      oscillator1.stop(audioContext.currentTime + 0.15)
-      
-      // Второй "бип" (чуть выше)
-      const oscillator2 = audioContext.createOscillator()
-      const gainNode2 = audioContext.createGain()
-      
-      oscillator2.connect(gainNode2)
-      gainNode2.connect(audioContext.destination)
-      
-      oscillator2.frequency.value = 1000
-      oscillator2.type = 'sine'
-      
-      gainNode2.gain.setValueAtTime(0.5, audioContext.currentTime + 0.2)
-      gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.35)
-      
-      oscillator2.start(audioContext.currentTime + 0.2)
-      oscillator2.stop(audioContext.currentTime + 0.35)
-      
-      console.log('✅ Звук воспроизведен')
-    } catch (error) {
-      console.error('❌ Ошибка воспроизведения звука:', error)
-    }
-  }
+  // Разблокировка звука после первого клика/нажатия клавиши (политика браузера)
+  useEffect(() => setupNotificationSoundUnlock(), [])
 
+  // Начальная загрузка; fallback polling 60s (WebSocket — основной канал)
   useEffect(() => {
     fetchNotifications()
-    
-    // Проверяем уведомления каждые 10 секунд
-    const interval = setInterval(() => {
-      fetchNotifications()
-    }, 10000)
-    
+    const interval = setInterval(fetchNotifications, 60000)
     return () => clearInterval(interval)
   }, [])
 
   // WebSocket для мгновенных уведомлений
   useEffect(() => {
-    if (!socket || !session?.user?.id) return
+    if (!socket || !isConnected || !session?.user?.id) return
 
-    // Присоединяемся к комнате пользователя
     socket.emit('join-user', session.user.id)
-    console.log('👤 Присоединились к комнате пользователя для уведомлений')
 
-    // Слушаем новые уведомления
-    socket.on('notification', (notification: Notification) => {
-      console.log('🔔 Получено уведомление через WebSocket:', notification)
-      
-      // Добавляем уведомление в список
+    const handleNotification = (notification: Notification) => {
       setNotifications((prev) => [notification, ...prev])
-      
-      // Воспроизводим звук
-      playNotificationSound()
-      
-      // Обновляем счётчик
+      void playNotificationSound()
       previousCountRef.current = previousCountRef.current + 1
-    })
+    }
+
+    socket.on('notification', handleNotification)
 
     return () => {
-      socket.off('notification')
+      socket.off('notification', handleNotification)
     }
-  }, [socket, session?.user?.id])
+  }, [socket, isConnected, session?.user?.id])
 
   const fetchNotifications = async () => {
     try {
@@ -128,13 +81,14 @@ export default function Notifications() {
           новые: currentUnreadCount - previousUnreadCount
         })
         
-        // Если появились новые непрочитанные уведомления, воспроизводим звук
-        if (currentUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
-          console.log('🎵 Обнаружены новые уведомления! Воспроизводим звук...')
-          playNotificationSound()
+        if (
+          !isInitialFetchRef.current &&
+          currentUnreadCount > previousUnreadCount
+        ) {
+          void playNotificationSound()
         }
-        
-        // Обновляем счетчик и уведомления
+
+        isInitialFetchRef.current = false
         previousCountRef.current = currentUnreadCount
         setNotifications(newNotifications)
       }
@@ -194,6 +148,9 @@ export default function Notifications() {
         case 'project':
           window.location.href = `/projects/${notification.actionId}`
           break
+        case 'chat':
+          window.location.href = '/chat'
+          break
         case 'document':
           window.location.href = `/documents`
           break
@@ -236,7 +193,10 @@ export default function Notifications() {
   return (
     <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          unlockNotificationSound()
+          setIsOpen(!isOpen)
+        }}
         className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg relative"
       >
         <Bell className="h-5 w-5" />
@@ -333,7 +293,7 @@ export default function Notifications() {
                   className="w-full text-sm"
                   onClick={() => {
                     setIsOpen(false)
-                    // Здесь можно добавить переход на страницу всех уведомлений
+                    router.push('/notifications')
                   }}
                 >
                   Показать все уведомления

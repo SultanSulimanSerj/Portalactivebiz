@@ -2,9 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import * as bcrypt from 'bcryptjs'
 import { generateId } from '@/lib/id-generator'
+import { isPublicRegistrationAllowed } from '@/lib/prod-guard'
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request)
+    const rateLimit = await checkRateLimit(`register-ip:${ip}`, 5, 60 * 60 * 1000)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Слишком много попыток регистрации. Попробуйте позже.' },
+        { status: 429 }
+      )
+    }
+
+    if (!isPublicRegistrationAllowed()) {
+      return NextResponse.json(
+        { error: 'Регистрация отключена. Обратитесь к администратору.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { 
       name, 

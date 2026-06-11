@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { verifyApprovalCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 import { getSignedUrl } from '@/lib/storage'
 
@@ -16,7 +17,10 @@ export async function GET(
 
     const { id: approvalId, attachmentId } = params
 
-    // Доступ: создатель согласования или участник (assignee)
+    if (!(await verifyApprovalCompanyAccess(user, approvalId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const approval = await prisma.approval.findUnique({
       where: { id: approvalId },
       include: {

@@ -192,25 +192,40 @@ export function apiMonitoringMiddleware(handler: Function) {
 // Системные метрики
 export async function getSystemMetrics(): Promise<SystemMetrics> {
   const memUsage = process.memoryUsage()
-  
+  const allMetrics = performanceMonitor.getMetrics()
+  const slowOps = performanceMonitor.getSlowOperations(1000)
+
+  let dbConnections = 0
+  try {
+    const { prisma } = await import('./prisma')
+    const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+    `
+    dbConnections = Number(rows[0]?.count ?? 0)
+  } catch {
+    dbConnections = 0
+  }
+
   return {
     memory: {
       used: memUsage.heapUsed,
       total: memUsage.heapTotal,
-      percentage: (memUsage.heapUsed / memUsage.heapTotal) * 100
+      percentage: (memUsage.heapUsed / memUsage.heapTotal) * 100,
     },
     cpu: {
-      usage: process.cpuUsage().user / 1000000 // Convert to seconds
+      usage: process.cpuUsage().user / 1000000,
     },
     database: {
-      connections: 0, // TODO: Implement database connection monitoring
-      queries: 0, // TODO: Implement query counting
-      slowQueries: 0 // TODO: Implement slow query detection
+      connections: dbConnections,
+      queries: allMetrics.length,
+      slowQueries: slowOps.length,
     },
     api: {
-      requests: performanceMonitor.getMetrics().length,
-      errors: performanceMonitor.getMetrics().filter(m => !m.success).length,
-      averageResponseTime: performanceMonitor.getAverageResponseTime()
-    }
+      requests: allMetrics.length,
+      errors: allMetrics.filter((m) => !m.success).length,
+      averageResponseTime: performanceMonitor.getAverageResponseTime(),
+    },
   }
 }

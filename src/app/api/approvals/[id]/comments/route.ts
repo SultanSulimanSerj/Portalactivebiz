@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { verifyApprovalCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
 
@@ -12,6 +13,10 @@ export async function GET(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!(await verifyApprovalCompanyAccess(user, params.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const comments = await prisma.approvalComment.findMany({
@@ -42,6 +47,10 @@ export async function POST(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!(await verifyApprovalCompanyAccess(user, params.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()

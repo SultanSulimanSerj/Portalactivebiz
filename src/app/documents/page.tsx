@@ -2,9 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { PageSuspense } from '@/components/page-suspense'
 import Layout from '@/components/layout'
-import { Plus, Search, Download, Trash2, Eye, X, Upload, ArrowLeft } from 'lucide-react'
+import { ErrorBanner } from '@/components/ui/error-banner'
+import { Plus, Search, Download, Trash2, Pencil, X, Upload, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { CreateDocumentMenu } from '@/components/documents/CreateDocumentMenu'
+import { getCategoryLabel, getCategoryColor, EDITABLE_CATEGORIES } from '@/lib/document-category-labels'
 
 interface Document {
   id: string
@@ -15,13 +19,20 @@ interface Document {
   fileSize: number
   mimeType: string
   version: number
+  category: string | null
+  editorStatus: string | null
+  hasEditableContent?: boolean
+  hasUnpublishedChanges?: boolean
+  pdfFilePath?: string | null
+  pdfFileSize?: number | null
+  lastExportedAt: string | null
   createdAt: string
   projectId: string | null
   project: { id: string; name: string } | null
   creator: { id: string; name: string; email: string }
 }
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
   const searchParams = useSearchParams()
   const projectIdFromUrl = searchParams?.get('projectId')
   
@@ -34,6 +45,7 @@ export default function DocumentsPage() {
   const [showModal, setShowModal] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [formData, setFormData] = useState({
     title: '',
@@ -66,14 +78,18 @@ export default function DocumentsPage() {
 
   const fetchDocuments = async () => {
     try {
+      setLoadError(null)
       const response = await fetch('/api/documents', {
       })
       if (response.ok) {
         const data = await response.json()
         setDocuments(data.documents || [])
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setLoadError(data.error || 'Не удалось загрузить документы')
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setLoadError('Ошибка при загрузке документов')
     } finally {
       setLoading(false)
     }
@@ -153,7 +169,8 @@ export default function DocumentsPage() {
         fetchDocuments()
         setDeleteConfirmId(null)
       } else {
-        setErrorMessage('Ошибка при удалении документа')
+        const data = await response.json().catch(() => ({}))
+        setErrorMessage(data.error || 'Ошибка при удалении документа')
       }
     } catch (err) {
       console.error(err)
@@ -187,6 +204,42 @@ export default function DocumentsPage() {
     return 'bg-gray-50 text-gray-700 border-gray-200'
   }
 
+  const getCategoryBadge = (doc: Document) => (
+    <span
+      className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded ${getCategoryColor(doc.category)}`}
+    >
+      {getCategoryLabel(doc.category)}
+    </span>
+  )
+
+  const getEditorStatusBadge = (doc: Document) => {
+    if (!EDITABLE_CATEGORIES.has(doc.category || '')) return null
+    const status =
+      doc.editorStatus === 'PUBLISHED' && doc.hasUnpublishedChanges
+        ? 'CHANGES'
+        : doc.editorStatus || 'DRAFT'
+    const labels: Record<string, string> = {
+      DRAFT: 'Черновик',
+      PUBLISHED: 'Опубликован',
+      CHANGES: 'Есть правки',
+      ARCHIVED: 'Архив',
+    }
+    const colors: Record<string, string> = {
+      DRAFT: 'bg-amber-100 text-amber-800',
+      PUBLISHED: 'bg-green-100 text-green-800',
+      CHANGES: 'bg-orange-100 text-orange-800',
+      ARCHIVED: 'bg-gray-100 text-gray-600',
+    }
+    return (
+      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded ${colors[status] || colors.DRAFT}`}>
+        {labels[status] || status}
+      </span>
+    )
+  }
+
+  const canEditDocument = (doc: Document) =>
+    EDITABLE_CATEGORIES.has(doc.category || '') && Boolean(doc.hasEditableContent)
+
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -209,6 +262,7 @@ export default function DocumentsPage() {
 
   return (
     <Layout>
+      <ErrorBanner message={loadError} onDismiss={() => setLoadError(null)} />
       {/* Ошибка */}
       {errorMessage && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-800 text-sm">
@@ -265,13 +319,16 @@ export default function DocumentsPage() {
             </h1>
             <p className="text-sm text-gray-600 mt-1">{filteredDocuments.length} документов</p>
           </div>
-          <button 
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Загрузить
-          </button>
+          <div className="flex items-center gap-2">
+            <CreateDocumentMenu projectId={projectIdFromUrl || undefined} />
+            <button 
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Загрузить
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -327,7 +384,11 @@ export default function DocumentsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div>
-                        <div className="text-sm font-semibold text-gray-900">{doc.title}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900">{doc.title}</span>
+                          {getCategoryBadge(doc)}
+                          {getEditorStatusBadge(doc)}
+                        </div>
                         {doc.description && (
                           <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{doc.description}</div>
                         )}
@@ -358,13 +419,32 @@ export default function DocumentsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {EDITABLE_CATEGORIES.has(doc.category || '') && (
+                          <Link
+                            href={`/documents/${doc.id}/edit`}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded"
+                            title={canEditDocument(doc) ? 'Редактировать' : 'Открыть'}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Link>
+                        )}
                         <button 
                           onClick={() => handleDownload(doc.id, doc.fileName)}
-                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" 
-                          title="Скачать"
+                          className="p-1.5 text-gray-500 hover:bg-gray-100 rounded disabled:opacity-40" 
+                          title="Скачать Excel"
+                          disabled={doc.fileSize === 0 && !doc.lastExportedAt}
                         >
                           <Download className="h-4 w-4" />
                         </button>
+                        {doc.pdfFilePath && (doc.pdfFileSize ?? 0) > 0 && (
+                          <a
+                            href={`/api/documents/${doc.id}/download?format=pdf`}
+                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded text-xs font-medium"
+                            title="Скачать PDF"
+                          >
+                            PDF
+                          </a>
+                        )}
                         <button 
                           onClick={() => handleDeleteClick(doc.id)}
                           className="p-1.5 text-gray-500 hover:bg-gray-100 rounded" 
@@ -470,5 +550,13 @@ export default function DocumentsPage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+export default function DocumentsPage() {
+  return (
+    <PageSuspense>
+      <DocumentsPageContent />
+    </PageSuspense>
   )
 }

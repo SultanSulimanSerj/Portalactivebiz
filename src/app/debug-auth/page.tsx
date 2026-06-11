@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 
-export default function DebugAuth() {
+function DebugAuthContent() {
   const { data: session, status } = useSession()
   const [apiTest, setApiTest] = useState<any>(null)
 
@@ -13,7 +13,7 @@ export default function DebugAuth() {
         const response = await fetch('/api/test-auth')
         const data = await response.json()
         setApiTest(data)
-      } catch (error) {
+      } catch {
         setApiTest({ error: 'Failed to fetch' })
       }
     }
@@ -23,7 +23,7 @@ export default function DebugAuth() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Debug Authentication</h1>
-      
+
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Client Session Status:</h2>
@@ -42,4 +42,14 @@ export default function DebugAuth() {
       </div>
     </div>
   )
+}
+
+export default function DebugAuth() {
+  if (process.env.NODE_ENV === 'production') {
+    return (
+      <div className="p-8 text-center text-gray-500">Страница недоступна</div>
+    )
+  }
+
+  return <DebugAuthContent />
 }

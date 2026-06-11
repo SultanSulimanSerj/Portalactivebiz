@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Layout from '@/components/layout'
+import { ErrorBanner } from '@/components/ui/error-banner'
 import { Bell, Check, X, Trash2, Eye, EyeOff, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,6 +19,7 @@ interface Notification {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [typeFilter, setTypeFilter] = useState('all')
@@ -29,6 +31,7 @@ export default function NotificationsPage() {
 
   const fetchNotifications = async () => {
     try {
+      setLoadError(null)
       const params = new URLSearchParams({
         unreadOnly: (!showAll).toString(),
         limit: '50'
@@ -47,9 +50,12 @@ export default function NotificationsPage() {
         
         setNotifications(filteredNotifications)
         setUnreadCount(data.unreadCount || 0)
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setLoadError(data.error || 'Не удалось загрузить уведомления')
       }
-    } catch (error) {
-      console.error('Error fetching notifications:', error)
+    } catch {
+      setLoadError('Ошибка при загрузке уведомлений')
     } finally {
       setLoading(false)
     }
@@ -176,6 +182,7 @@ export default function NotificationsPage() {
   return (
     <Layout>
       <div className="space-y-6">
+        <ErrorBanner message={loadError} onDismiss={() => setLoadError(null)} />
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>

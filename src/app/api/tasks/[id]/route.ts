@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { verifyTaskCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
 
@@ -11,6 +12,11 @@ export async function GET(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
     const task = await prisma.task.findUnique({
@@ -37,7 +43,7 @@ export async function GET(
     }
 
     // Загружаем подзадачи отдельно, чтобы не ломать запрос, если таблица еще не создана
-    let subtasks = []
+    let subtasks: Awaited<ReturnType<typeof prisma.taskSubtask.findMany>> = []
     try {
       subtasks = await prisma.taskSubtask.findMany({
         where: { taskId: params.id },
@@ -66,6 +72,11 @@ export async function PUT(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
     const body = await request.json()
@@ -134,6 +145,11 @@ export async function DELETE(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
     // Сначала удаляем все назначения задачи

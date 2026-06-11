@@ -1,43 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth-api'
+import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { generateId } from '@/lib/id-generator'
+import { isDebugRouteAllowed } from '@/lib/prod-guard'
+import { UserRole } from '@/lib/permissions'
+import { sendInviteEmail } from '@/lib/mail'
+
+const OWNER_INVITE_ROLES = [UserRole.ADMIN, UserRole.MANAGER, UserRole.USER] as const
+const ADMIN_INVITE_ROLES = [UserRole.MANAGER, UserRole.USER] as const
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await authenticateUser(request)
+    const { allowed, user, error } = await checkPermission(request, 'canCreateUsers')
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    // Проверяем права доступа (только OWNER и ADMIN могут приглашать)
-    if (!['OWNER', 'ADMIN'].includes(user.role)) {
-      return NextResponse.json({ error: 'Недостаточно прав для приглашения пользователей' }, { status: 403 })
+    if (!allowed) {
+      return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
     }
 
     const body = await request.json()
     const { email, name, role, position } = body
 
-    // Валидация
     if (!email || !name || !role) {
       return NextResponse.json({ error: 'Email, имя и роль обязательны' }, { status: 400 })
     }
 
-    // Проверяем, существует ли пользователь
+    const allowedRoles =
+      user.role === UserRole.OWNER ? OWNER_INVITE_ROLES : ADMIN_INVITE_ROLES
+
+    if (!allowedRoles.includes(role)) {
+      return NextResponse.json({ error: 'Недопустимая роль для приглашения' }, { status: 400 })
+    }
+
     const existingUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email },
     })
 
     if (existingUser) {
       return NextResponse.json({ error: 'Пользователь с таким email уже существует' }, { status: 400 })
     }
 
-    // Генерируем временный пароль
     const tempPassword = Math.random().toString(36).slice(-8)
     const hashedPassword = await bcrypt.hash(tempPassword, 10)
 
-    // Создаем пользователя
     const newUser = await prisma.user.create({
       data: {
         id: generateId(),
@@ -46,7 +53,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         role,
         position: position || 'Сотрудник',
-        companyId: user.companyId!
+        companyId: user.companyId!,
       },
       select: {
         id: true,
@@ -54,18 +61,39 @@ export async function POST(request: NextRequest) {
         email: true,
         role: true,
         position: true,
-        createdAt: true
-      }
+        createdAt: true,
+      },
     })
 
-    // В реальном приложении здесь бы отправлялся email с приглашением
-    // Пока просто возвращаем данные пользователя и временный пароль
-    return NextResponse.json({
-      message: 'Пользователь успешно приглашен',
-      user: newUser,
-      tempPassword // В продакшене это не должно возвращаться
-    }, { status: 201 })
+    const emailSent = await sendInviteEmail({
+      to: email,
+      name,
+      tempPassword,
+      invitedBy: user.email || 'Администратор',
+    })
 
+    if (process.env.NODE_ENV === 'production' && !emailSent) {
+      await prisma.user.delete({ where: { id: newUser.id } })
+      return NextResponse.json(
+        {
+          error:
+            'Не удалось отправить email с паролем. Настройте SMTP (EMAIL_SERVER_* в .env) и повторите приглашение.',
+        },
+        { status: 503 }
+      )
+    }
+
+    return NextResponse.json(
+      {
+        message: emailSent
+          ? 'Пользователь приглашён, письмо отправлено на email'
+          : 'Пользователь приглашён',
+        user: newUser,
+        emailSent,
+        ...(isDebugRouteAllowed() && !emailSent ? { tempPassword } : {}),
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Invite error:', error)
     return NextResponse.json({ error: 'Ошибка приглашения пользователя' }, { status: 500 })

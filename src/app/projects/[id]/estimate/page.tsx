@@ -7,6 +7,7 @@ import { useState as useStateNav } from 'react'
 import { ArrowLeft, Plus, Edit, Trash2, Save, Calculator, FileText, DollarSign, Download, Copy, Search, Filter, SortAsc, SortDesc, Eye, EyeOff, Check, X, AlertCircle, Info, Zap, Menu, Home, FolderOpen, Flag, CheckCircle, MessageSquare, BarChart3, Users, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { PermissionButton } from '@/components/permission-guard'
+import { CreateDocumentMenu } from '@/components/documents/CreateDocumentMenu'
 
 interface EstimateItem {
   id: string
@@ -102,33 +103,27 @@ export default function EstimatePage() {
   })
 
   // Шаблоны смет
-  const [templates] = useState<EstimateTemplate[]>([
-    {
-      id: 'construction',
-      name: 'Строительные работы',
-      items: [
-        { name: 'Земляные работы', description: 'Разработка грунта', quantity: 1, unit: 'м³', unitPrice: 500, costPrice: 300, total: 500, category: 'Работы' },
-        { name: 'Бетонные работы', description: 'Заливка фундамента', quantity: 1, unit: 'м³', unitPrice: 3000, costPrice: 2000, total: 3000, category: 'Работы' },
-        { name: 'Кирпичная кладка', description: 'Кладка стен', quantity: 1, unit: 'м²', unitPrice: 2000, costPrice: 1200, total: 2000, category: 'Работы' }
-      ]
-    },
-    {
-      id: 'renovation',
-      name: 'Ремонтные работы',
-      items: [
-        { name: 'Демонтаж', description: 'Снос старых конструкций', quantity: 1, unit: 'м²', unitPrice: 500, costPrice: 300, total: 500, category: 'Работы' },
-        { name: 'Штукатурка', description: 'Выравнивание стен', quantity: 1, unit: 'м²', unitPrice: 800, costPrice: 400, total: 800, category: 'Работы' },
-        { name: 'Покраска', description: 'Финишная отделка', quantity: 1, unit: 'м²', unitPrice: 300, costPrice: 150, total: 300, category: 'Работы' }
-      ]
-    }
-  ])
+  const [templates, setTemplates] = useState<EstimateTemplate[]>([])
 
   const tableRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchProject()
     fetchEstimates()
+    fetchEstimateTemplates()
   }, [projectId])
+
+  const fetchEstimateTemplates = async () => {
+    try {
+      const response = await fetch('/api/estimate-templates')
+      if (response.ok) {
+        const data = await response.json()
+        setTemplates(data.templates || [])
+      }
+    } catch (error) {
+      console.error('Error fetching estimate templates:', error)
+    }
+  }
 
 
   const fetchProject = async () => {
@@ -555,9 +550,15 @@ export default function EstimatePage() {
     })
   }
 
-  const generateCommercialOffer = () => {
-    // Здесь будет логика генерации коммерческого предложения
-    console.log('Generating commercial offer...')
+  const openDocumentWizard = (type: 'COMMERCIAL_OFFER' | 'INVOICE') => {
+    if (!activeEstimate) {
+      alert('Выберите смету')
+      return
+    }
+    setShowExportModal(false)
+    router.push(
+      `/documents/new?type=${type}&projectId=${projectId}&estimateId=${activeEstimate.id}`
+    )
   }
 
   const filteredEstimates = estimates.filter(estimate => 
@@ -1139,13 +1140,14 @@ export default function EstimatePage() {
                             <FileText className="h-5 w-5" />
                           </button>
                           
-                          <button
-                            onClick={generateCommercialOffer}
-                            className="p-3 text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                            title="Генерировать коммерческое предложение"
-                          >
-                            <Calculator className="h-5 w-5" />
-                          </button>
+                          {activeEstimate && (
+                            <CreateDocumentMenu
+                              projectId={projectId}
+                              estimateId={activeEstimate.id}
+                              buttonLabel="Документ"
+                              className="inline-flex"
+                            />
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1299,13 +1301,26 @@ export default function EstimatePage() {
                 </button>
                 
                 <button
-                  onClick={generateCommercialOffer}
-                  className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-colors"
+                  onClick={() => openDocumentWizard('COMMERCIAL_OFFER')}
+                  disabled={!activeEstimate}
+                  className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-colors disabled:opacity-50"
                 >
                   <Calculator className="h-5 w-5 text-purple-600" />
                   <div className="text-left">
                     <div className="font-medium text-gray-900">Коммерческое предложение</div>
-                    <div className="text-sm text-gray-600">Готовый документ для клиента</div>
+                    <div className="text-sm text-gray-600">Черновик в редакторе</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => openDocumentWizard('INVOICE')}
+                  disabled={!activeEstimate}
+                  className="w-full flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-amber-300 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                >
+                  <FileText className="h-5 w-5 text-amber-600" />
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900">Счёт на оплату</div>
+                    <div className="text-sm text-gray-600">УПД создаётся из счёта</div>
                   </div>
                 </button>
               </div>

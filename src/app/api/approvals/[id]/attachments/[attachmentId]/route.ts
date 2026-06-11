@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { verifyApprovalCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 import { deleteFile } from '@/lib/storage'
 import { generateId } from '@/lib/id-generator'
@@ -13,6 +14,10 @@ export async function DELETE(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!(await verifyApprovalCompanyAccess(user, params.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Получаем вложение

@@ -62,6 +62,7 @@ model User {
   createdProjects       Project[]            @relation("ProjectCreator")
   createdTasks          Task[]               @relation("TaskCreator")
   createdDocuments      Document[]           @relation("DocumentCreator")
+  documentExportJobs    DocumentExportJob[]  @relation("DocumentExportRequestedBy")
   createdApprovals      Approval[]           @relation("ApprovalCreator")
   approvalAssignments   ApprovalAssignment[]
   chatMessages          ChatMessage[]
@@ -130,6 +131,7 @@ model Company {
   taskSubtasks         TaskSubtask[]
   documents            Document[]
   documentVersions     DocumentVersion[]
+  documentExportJobs   DocumentExportJob[]
   approvals            Approval[]
   approvalAssignments  ApprovalAssignment[]
   chatMessages         ChatMessage[]
@@ -334,34 +336,54 @@ model TaskSubtask {
 }
 
 model Document {
-  id               String    @id @default(cuid())
+  id               String               @id @default(cuid())
   title            String
   description      String?
   fileName         String
   filePath         String
   fileSize         Int
   mimeType         String
-  version          Int       @default(1)
-  isLatest         Boolean   @default(true)
+  version          Int                  @default(1)
+  isLatest         Boolean              @default(true)
   documentNumber   String?
-  isPublished      Boolean   @default(false)
+  isPublished      Boolean              @default(false)
   publishedAt      DateTime?
-  approvalRequired Boolean   @default(false)
-  category         String?   @default("GENERAL")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  approvalRequired Boolean              @default(false)
+  category         String?              @default("GENERAL")
+  editorStatus          DocumentEditorStatus @default(DRAFT)
+  contentJson           Json?
+  sourceMeta            Json?
+  lastExportedAt        DateTime?
+  hasUnpublishedChanges Boolean              @default(false)
+  numberAllocated       Boolean              @default(false)
+  pdfFileName           String?
+  pdfFilePath           String?
+  pdfFileSize           Int?
+  exportContentHash     String?
+  edoStatus             DocumentEdoStatus    @default(NONE)
+  edoXmlPath            String?
+  edoXmlFileName        String?
+  edoXmlFileSize        Int?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   // Relations
-  projectId  String?
-  project    Project?          @relation(fields: [projectId], references: [id])
-  creatorId  String
-  creator    User              @relation("DocumentCreator", fields: [creatorId], references: [id])
-  templateId String?
-  companyId  String?
-  company    Company?          @relation(fields: [companyId], references: [id])
-  template   DocumentTemplate? @relation(fields: [templateId], references: [id])
-  versions   DocumentVersion[]
-  approvals  Approval[]
+  projectId        String?
+  project          Project?          @relation(fields: [projectId], references: [id])
+  parentDocumentId String?
+  parentDocument   Document?         @relation("DocumentChain", fields: [parentDocumentId], references: [id], onDelete: SetNull)
+  childDocuments   Document[]        @relation("DocumentChain")
+  creatorId        String
+  creator          User              @relation("DocumentCreator", fields: [creatorId], references: [id])
+  templateId       String?
+  companyId        String?
+  company          Company?          @relation(fields: [companyId], references: [id])
+  template         DocumentTemplate? @relation(fields: [templateId], references: [id])
+  versions         DocumentVersion[]
+  approvals        Approval[]
+  exportJobs       DocumentExportJob[]
+
+  @@index([parentDocumentId])
 
   @@index([projectId])
   @@index([creatorId])
@@ -373,16 +395,25 @@ model Document {
   @@index([isPublished])
   @@index([approvalRequired])
   @@index([category])
+  @@index([companyId, category])
+  @@index([editorStatus])
+  @@index([edoStatus])
+  @@unique([companyId, category, documentNumber], name: "document_company_category_number")
 }
 
 model DocumentVersion {
-  id        String   @id @default(cuid())
-  version   Int
-  fileName  String
-  filePath  String
-  fileSize  Int
-  mimeType  String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  version     Int
+  fileName    String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+  contentJson Json?
+  comment     String?
+  pdfFileName String?
+  pdfFilePath String?
+  pdfFileSize Int?
+  createdAt   DateTime @default(now())
 
   documentId String
   document   Document @relation(fields: [documentId], references: [id])
@@ -472,6 +503,7 @@ model ChatMessage {
   company   Company? @relation(fields: [companyId], references: [id])
 
   @@index([companyId])
+  @@index([projectId, createdAt])
 }
 
 model Finance {
@@ -503,6 +535,8 @@ model Finance {
   estimateItem   EstimateItem? @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
+  @@index([companyId, date])
+  @@index([projectId, date])
   @@index([isPaid])
   @@index([estimateItemId])
 }
@@ -797,6 +831,54 @@ enum NotificationType {
 }
 
 // Новые enum'ы для улучшенной системы согласований
+enum DocumentEditorStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DocumentEdoStatus {
+  NONE
+  PENDING
+  READY
+  SENT
+  ERROR
+}
+
+enum DocumentExportJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model DocumentExportJob {
+  id            String                  @id @default(cuid())
+  documentId    String
+  document      Document                @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  companyId     String
+  company       Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestedById String
+  requestedBy   User                    @relation("DocumentExportRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  format        String
+  status        DocumentExportJobStatus @default(QUEUED)
+  contentHash   String
+  publish       Boolean                 @default(false)
+  comment       String?
+  errorMessage  String?                 @db.Text
+  bullJobId     String?
+  attempts      Int                     @default(0)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([documentId, status])
+  @@index([companyId, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([status, createdAt])
+}
+
 enum ApprovalPriority {
   LOW
   MEDIUM

@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
       return {
         id: finance.id,
         number: finance.invoiceNumber || `${isIncome ? 'СЧ' : 'ПЛ'}-${String(index + 1).padStart(3, '0')}`,
-        type: (isIncome ? 'invoice' : 'payment') as const,
+        type: isIncome ? ('invoice' as const) : ('payment' as const),
         amount: Number(finance.amount),
         date: finance.date.toISOString().split('T')[0],
         dueDate: dueDate.toISOString().split('T')[0],
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
 // PATCH - отметить счёт как оплаченный
 export async function PATCH(request: NextRequest) {
   try {
-    const { allowed, user, error } = await checkPermission(request, 'canViewFinances')
+    const { allowed, user, error } = await checkPermission(request, 'canEditFinances')
     
     if (!user) {
       return NextResponse.json({ error: 'Пользователь не найден' }, { status: 401 })

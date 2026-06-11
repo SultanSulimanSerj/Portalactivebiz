@@ -1,67 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { authenticateUser } from '@/lib/auth-api'
+import { checkPermission } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
+import { enqueueJob } from '@/lib/job-queue'
+import { getReportDateRange, periodLabel, prismaDateFilter } from '@/lib/report-utils'
 import * as XLSX from 'xlsx'
+
+const MAX_REPORT_ROWS = 5000
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await authenticateUser(request)
+    const { allowed, user, error } = await checkPermission(request, 'canExportReports')
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!allowed) {
+      return NextResponse.json({ error: error || 'Forbidden' }, { status: 403 })
+    }
+    if (!user.companyId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
     const { reportType, period, startDate, endDate } = body
+    const dateRange = getReportDateRange(period || 'all', startDate, endDate)
+    const dateFilter = prismaDateFilter(dateRange)
+    const createdAtFilter = dateFilter ? { createdAt: dateFilter } : undefined
+    const financeDateFilter = dateFilter ? { date: dateFilter } : undefined
 
-    // Получаем данные для отчета
-    let reportData = []
+    return await enqueueJob(async () => {
+    let reportData: Record<string, string | number>[] = []
     let fileName = ''
     let sheetName = ''
 
     switch (reportType) {
-      case 'financial':
+      case 'financial': {
         const finances = await prisma.finance.findMany({
           where: {
-            project: {
-              companyId: user.companyId!
-            }
+            project: { companyId: user.companyId! },
+            ...(financeDateFilter || {}),
           },
-          include: {
-            project: {
-              select: { name: true }
-            }
-          }
+          include: { project: { select: { name: true } } },
+          orderBy: { date: 'desc' },
+          take: MAX_REPORT_ROWS,
         })
-        
-        reportData = finances.map(f => ({
+
+        reportData = finances.map((f) => ({
           'Тип операции': f.type === 'INCOME' ? 'Доход' : 'Расход',
           'Категория': f.category,
           'Описание': f.description || 'Без описания',
           'Сумма (₽)': Number(f.amount).toLocaleString('ru-RU'),
           'Дата операции': new Date(f.date).toLocaleDateString('ru-RU'),
           'Проект': f.project.name,
-          'ID записи': f.id
+          'ID записи': f.id,
         }))
         fileName = `financial_report_${Date.now()}.xlsx`
         sheetName = 'Финансовый отчет'
         break
+      }
 
-      case 'projects':
+      case 'projects': {
         const projects = await prisma.project.findMany({
           where: {
-            companyId: user.companyId!
+            companyId: user.companyId!,
+            ...(createdAtFilter || {}),
           },
-          include: {
-            _count: {
-              select: {
-                tasks: true,
-                documents: true
-              }
-            }
-          }
+          include: { _count: { select: { tasks: true, documents: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: MAX_REPORT_ROWS,
         })
-        
-        reportData = projects.map(p => ({
+
+        reportData = projects.map((p) => ({
           'Название проекта': p.name,
           'Описание': p.description || 'Без описания',
           'Статус': p.status,
@@ -72,28 +80,25 @@ export async function POST(request: NextRequest) {
           'Количество задач': p._count.tasks,
           'Количество документов': p._count.documents,
           'Дата создания': new Date(p.createdAt).toLocaleDateString('ru-RU'),
-          'ID проекта': p.id
+          'ID проекта': p.id,
         }))
         fileName = `projects_report_${Date.now()}.xlsx`
         sheetName = 'Отчет по проектам'
         break
+      }
 
-      case 'users':
+      case 'users': {
         const users = await prisma.user.findMany({
           where: {
-            companyId: user.companyId
+            companyId: user.companyId,
+            ...(createdAtFilter || {}),
           },
-          include: {
-            _count: {
-              select: {
-                createdProjects: true,
-                createdTasks: true
-              }
-            }
-          }
+          include: { _count: { select: { createdProjects: true, createdTasks: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: MAX_REPORT_ROWS,
         })
-        
-        reportData = users.map(u => ({
+
+        reportData = users.map((u) => ({
           'ФИО': u.name || 'Не указано',
           'Email': u.email,
           'Роль в системе': u.role,
@@ -102,30 +107,28 @@ export async function POST(request: NextRequest) {
           'Создано проектов': u._count.createdProjects,
           'Создано задач': u._count.createdTasks,
           'Дата регистрации': new Date(u.createdAt).toLocaleDateString('ru-RU'),
-          'ID пользователя': u.id
+          'ID пользователя': u.id,
         }))
         fileName = `users_report_${Date.now()}.xlsx`
         sheetName = 'Отчет по пользователям'
         break
+      }
 
-      case 'documents':
+      case 'documents': {
         const documents = await prisma.document.findMany({
           where: {
-            project: {
-              companyId: user.companyId!
-            }
+            project: { companyId: user.companyId! },
+            ...(createdAtFilter || {}),
           },
           include: {
-            project: {
-              select: { name: true }
-            },
-            creator: {
-              select: { name: true }
-            }
-          }
+            project: { select: { name: true } },
+            creator: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: MAX_REPORT_ROWS,
         })
-        
-        reportData = documents.map(d => ({
+
+        reportData = documents.map((d) => ({
           'Название документа': d.title,
           'Описание': d.description || 'Без описания',
           'Имя файла': d.fileName,
@@ -136,24 +139,22 @@ export async function POST(request: NextRequest) {
           'Проект': d.project?.name || 'Без проекта',
           'Создатель': d.creator.name || 'Неизвестно',
           'Дата создания': new Date(d.createdAt).toLocaleDateString('ru-RU'),
-          'ID документа': d.id
+          'ID документа': d.id,
         }))
         fileName = `documents_report_${Date.now()}.xlsx`
         sheetName = 'Отчет по документам'
         break
+      }
 
       default:
-        return NextResponse.json(
-          { error: 'Invalid report type' },
-          { status: 400 }
-        )
+        throw new Error('Invalid report type')
     }
 
     // Добавляем метаданные в начало отчета
     const metadata = [
       { 'Параметр': 'Тип отчета', 'Значение': sheetName },
       { 'Параметр': 'Дата генерации', 'Значение': new Date().toLocaleString('ru-RU') },
-      { 'Параметр': 'Период', 'Значение': period || 'Все время' },
+      { 'Параметр': 'Период', 'Значение': periodLabel(period || 'all') },
       { 'Параметр': 'Количество записей', 'Значение': reportData.length },
       { 'Параметр': '', 'Значение': '' }, // Пустая строка
     ]
@@ -263,8 +264,12 @@ export async function POST(request: NextRequest) {
         'Content-Disposition': `attachment; filename="${fileName}"`
       }
     })
+    })
 
   } catch (error) {
+    if (error instanceof Error && error.message === 'Invalid report type') {
+      return NextResponse.json({ error: 'Invalid report type' }, { status: 400 })
+    }
     console.error('Error generating report:', error)
     return NextResponse.json(
       { error: 'Failed to generate report' },

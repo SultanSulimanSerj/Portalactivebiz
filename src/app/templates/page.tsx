@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Layout from '@/components/layout'
+import { ErrorBanner } from '@/components/ui/error-banner'
 import { FileText, Search, Filter, Eye, FileType, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
@@ -49,6 +50,7 @@ const fileTypeLabels: Record<string, string> = {
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<SystemTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
 
@@ -58,6 +60,7 @@ export default function TemplatesPage() {
 
   const fetchTemplates = async () => {
     try {
+      setLoadError(null)
       const params = new URLSearchParams()
       if (filterCategory !== 'all') params.append('category', filterCategory)
 
@@ -65,9 +68,12 @@ export default function TemplatesPage() {
       if (response.ok) {
         const data = await response.json()
         setTemplates(data.templates || [])
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setLoadError(data.error || 'Не удалось загрузить шаблоны')
       }
-    } catch (error) {
-      console.error('Error fetching system templates:', error)
+    } catch {
+      setLoadError('Ошибка при загрузке шаблонов')
     } finally {
       setLoading(false)
     }
@@ -80,16 +86,17 @@ export default function TemplatesPage() {
 
   return (
     <Layout>
+      <ErrorBanner message={loadError} onDismiss={() => setLoadError(null)} />
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Системные шаблоны</h1>
             <p className="text-sm text-gray-600 mt-1">
-              Готовые шаблоны документов с автоматическим заполнением данных
+              Готовые шаблоны документов с автоматическим заполнением данных. При создании документа выберите проект.
             </p>
           </div>
           <Link
-            href="/documents/generate"
+            href="/documents/new"
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <FileText className="h-4 w-4" />

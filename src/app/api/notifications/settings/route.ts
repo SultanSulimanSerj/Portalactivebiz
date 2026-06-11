@@ -49,7 +49,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Проверяем права (только админ или руководитель)
-    if (user.role !== 'ADMIN' && user.role !== 'MANAGER') {
+    if (user.role !== 'ADMIN' && user.role !== 'MANAGER' && user.role !== 'OWNER') {
       return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 })
     }
 

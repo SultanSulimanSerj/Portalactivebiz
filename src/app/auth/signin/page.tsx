@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { signIn, getSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { PageSuspense } from '@/components/page-suspense'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { LogIn, Eye, EyeOff, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 
-export default function SignInPage() {
+function SignInPageContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -24,6 +25,9 @@ export default function SignInPage() {
     const message = searchParams?.get('message')
     if (message === 'registration-success') {
       setSuccessMessage('Регистрация прошла успешно! Теперь вы можете войти в систему.')
+    }
+    if (message === 'registration-disabled') {
+      setError('Публичная регистрация отключена. Обратитесь к администратору.')
     }
   }, [searchParams])
 
@@ -142,16 +146,26 @@ export default function SignInPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
-              Нет аккаунта?{' '}
-              <Link href="/auth/signup" className="text-blue-600 hover:text-blue-500 font-medium">
-                Зарегистрироваться
-              </Link>
-            </p>
-          </div>
+          {process.env.NEXT_PUBLIC_ALLOW_PUBLIC_REGISTRATION !== 'false' && (
+            <div className="mt-6 text-center">
+              <p className="text-sm text-gray-600">
+                Нет аккаунта?{' '}
+                <Link href="/auth/signup" className="text-blue-600 hover:text-blue-500 font-medium">
+                  Зарегистрироваться
+                </Link>
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function SignInPage() {
+  return (
+    <PageSuspense>
+      <SignInPageContent />
+    </PageSuspense>
   )
 }

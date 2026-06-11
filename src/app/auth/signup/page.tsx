@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,19 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+
+  const registrationEnabled =
+    process.env.NEXT_PUBLIC_ALLOW_PUBLIC_REGISTRATION !== 'false'
+
+  useEffect(() => {
+    if (!registrationEnabled) {
+      router.replace('/auth/signin?message=registration-disabled')
+    }
+  }, [registrationEnabled, router])
+
+  if (!registrationEnabled) {
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -160,8 +160,9 @@ npm start
 ## 🔧 API Endpoints
 
 ### Аутентификация
-- `POST /api/auth/login` - Вход в систему
-- `POST /api/auth/logout` - Выход из системы
+- NextAuth: `POST /api/auth/callback/credentials` (через `/auth/signin`)
+- `POST /api/auth/register` — регистрация (если `ALLOW_PUBLIC_REGISTRATION=true`)
+- `POST /api/auth/invite` — приглашение пользователя (ADMIN/OWNER)
 
 ### Проекты
 - `GET /api/projects` - Список проектов (с пагинацией)

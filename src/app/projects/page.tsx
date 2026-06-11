@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { PageSuspense } from '@/components/page-suspense'
 import Layout from '@/components/layout'
+import { ErrorBanner } from '@/components/ui/error-banner'
 import { Plus, Search, Edit, Trash2, Users, X } from 'lucide-react'
 import Link from 'next/link'
 
@@ -41,7 +44,8 @@ interface Project {
   }
 }
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
+  const searchParams = useSearchParams()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -50,6 +54,7 @@ export default function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [showClientRequisites, setShowClientRequisites] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -78,18 +83,25 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     fetchProjects()
-  }, [])
+    if (searchParams?.get('create') === '1') {
+      setShowModal(true)
+    }
+  }, [searchParams])
 
   const fetchProjects = async () => {
     try {
+      setLoadError(null)
       const response = await fetch('/api/projects', {
       })
       if (response.ok) {
         const data = await response.json()
         setProjects(data.projects || [])
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setLoadError(data.error || 'Не удалось загрузить проекты')
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setLoadError('Ошибка при загрузке проектов')
     } finally {
       setLoading(false)
     }
@@ -263,6 +275,7 @@ export default function ProjectsPage() {
   return (
     <Layout>
       <div className="space-y-6">
+        <ErrorBanner message={loadError} onDismiss={() => setLoadError(null)} />
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
@@ -737,5 +750,13 @@ export default function ProjectsPage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+export default function ProjectsPage() {
+  return (
+    <PageSuspense>
+      <ProjectsPageContent />
+    </PageSuspense>
   )
 }

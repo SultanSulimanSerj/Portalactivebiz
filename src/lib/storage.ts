@@ -1,92 +1,138 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  CreateBucketCommand,
+} from '@aws-sdk/client-s3'
 import { getSignedUrl as awsGetSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-// MinIO конфигурация
+function getMinioEndpoint(): string {
+  const raw = process.env.MINIO_ENDPOINT
+  if (raw?.startsWith('http://') || raw?.startsWith('https://')) {
+    return raw
+  }
+  const host = raw || 'localhost'
+  const port = process.env.MINIO_PORT || '9000'
+  const ssl = process.env.MINIO_USE_SSL === 'true'
+  return `${ssl ? 'https' : 'http'}://${host}:${port}`
+}
+
+function getMinioCredentials() {
+  return {
+    accessKeyId:
+      process.env.MINIO_ACCESS_KEY ||
+      process.env.MINIO_ROOT_USER ||
+      'minioadmin',
+    secretAccessKey:
+      process.env.MINIO_SECRET_KEY ||
+      process.env.MINIO_ROOT_PASSWORD ||
+      'changeme_local_dev',
+  }
+}
+
 const s3Client = new S3Client({
-  endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000',
+  endpoint: getMinioEndpoint(),
   region: 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.MINIO_ACCESS_KEY || 'minioadmin',
-    secretAccessKey: process.env.MINIO_SECRET_KEY || 'minioadmin123',
-  },
-  forcePathStyle: true, // MinIO требует path-style URLs
+  credentials: getMinioCredentials(),
+  forcePathStyle: true,
 })
 
-const BUCKET_NAME = process.env.MINIO_BUCKET || 'project-portal'
+const BUCKET_NAME = process.env.MINIO_BUCKET || 'manexa-documents'
 
-// Создание bucket если не существует
-async function ensureBucketExists() {
+let bucketInitPromise: Promise<void> | null = null
+
+async function ensureBucketExists(): Promise<void> {
   try {
-    const { CreateBucketCommand } = await import('@aws-sdk/client-s3')
-    await s3Client.send(new CreateBucketCommand({
-      Bucket: BUCKET_NAME,
-    }))
-    console.log(`Bucket ${BUCKET_NAME} created successfully`)
-  } catch (error: any) {
-    if (error.name === 'BucketAlreadyOwnedByYou' || error.name === 'BucketAlreadyExists') {
-      console.log(`Bucket ${BUCKET_NAME} already exists`)
-    } else {
-      console.error('Error creating bucket:', error)
+    await s3Client.send(
+      new CreateBucketCommand({
+        Bucket: BUCKET_NAME,
+      })
+    )
+  } catch (error: unknown) {
+    const err = error as { name?: string }
+    if (
+      err.name !== 'BucketAlreadyOwnedByYou' &&
+      err.name !== 'BucketAlreadyExists'
+    ) {
+      throw error
     }
   }
 }
 
-// Инициализация при первом импорте
-ensureBucketExists()
-
-// Экспортируем отдельные функции для удобства
-export async function uploadFile(filePath: string, buffer: Buffer, mimeType: string): Promise<string> {
-  try {
-    const command = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: filePath,
-      Body: buffer,
-      ContentType: mimeType,
+async function ensureStorageReady(): Promise<void> {
+  if (!bucketInitPromise) {
+    bucketInitPromise = ensureBucketExists().catch((err) => {
+      bucketInitPromise = null
+      throw err
     })
-
-    await s3Client.send(command)
-    return `${process.env.MINIO_ENDPOINT || 'http://localhost:9000'}/${BUCKET_NAME}/${filePath}`
-  } catch (error) {
-    console.error('Error uploading file:', error)
-    throw new Error('Failed to upload file')
   }
+  await bucketInitPromise
+}
+
+export async function uploadFile(
+  filePath: string,
+  buffer: Buffer,
+  mimeType: string
+): Promise<string> {
+  await ensureStorageReady()
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: filePath,
+    Body: buffer,
+    ContentType: mimeType,
+  })
+
+  await s3Client.send(command)
+  return `${getMinioEndpoint()}/${BUCKET_NAME}/${filePath}`
 }
 
 export async function deleteFile(filePath: string): Promise<void> {
-  try {
-    const command = new DeleteObjectCommand({
+  await ensureStorageReady()
+  await s3Client.send(
+    new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: filePath,
     })
-
-    await s3Client.send(command)
-  } catch (error) {
-    console.error('Error deleting file:', error)
-    throw new Error('Failed to delete file')
-  }
+  )
 }
 
-export async function getSignedUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
-  try {
-    const command = new GetObjectCommand({
+export async function getFileBuffer(filePath: string): Promise<Buffer> {
+  await ensureStorageReady()
+  const response = await s3Client.send(
+    new GetObjectCommand({
       Bucket: BUCKET_NAME,
       Key: filePath,
     })
-
-    return await awsGetSignedUrl(s3Client, command, { expiresIn })
-  } catch (error) {
-    console.error('Error generating signed URL:', error)
-    throw new Error('Failed to generate signed URL')
+  )
+  const body = response.Body
+  if (!body) {
+    throw new Error(`Файл не найден: ${filePath}`)
   }
+  const bytes = await body.transformToByteArray()
+  return Buffer.from(bytes)
+}
+
+export async function getSignedUrl(
+  filePath: string,
+  expiresIn: number = 3600
+): Promise<string> {
+  await ensureStorageReady()
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: filePath,
+  })
+
+  return awsGetSignedUrl(s3Client, command, { expiresIn })
 }
 
 export function getPublicUrl(filePath: string): string {
-  return `${process.env.MINIO_ENDPOINT || 'http://localhost:9000'}/${BUCKET_NAME}/${filePath}`
+  return `${getMinioEndpoint()}/${BUCKET_NAME}/${filePath}`
 }
 
 export const storage = {
   uploadFile,
   deleteFile,
   getSignedUrl,
-  getPublicUrl
+  getPublicUrl,
 }

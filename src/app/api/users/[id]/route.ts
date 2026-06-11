@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkPermission } from '@/lib/auth-middleware'
+import { verifyUserCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@/lib/permissions'
 
@@ -16,6 +17,10 @@ export async function PUT(
     
     // Пользователь может редактировать только свой профиль (без изменения роли)
     const isSelfEdit = params.id === user.id
+
+    if (!isSelfEdit && !(await verifyUserCompanyAccess(user, params.id))) {
+      return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 })
+    }
     
     if (!allowed && !isSelfEdit) {
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
@@ -101,6 +106,10 @@ export async function DELETE(
     // Don't allow deleting yourself
     if (params.id === user.id) {
       return NextResponse.json({ error: 'Нельзя удалить самого себя' }, { status: 400 })
+    }
+
+    if (!(await verifyUserCompanyAccess(user, params.id))) {
+      return NextResponse.json({ error: 'Пользователь не найден' }, { status: 404 })
     }
 
     // Проверяем, что нельзя удалить владельца

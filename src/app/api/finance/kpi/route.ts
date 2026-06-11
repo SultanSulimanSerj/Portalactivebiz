@@ -6,11 +6,11 @@ import { logger } from '@/lib/logger'
 export async function GET(request: NextRequest) {
   try {
     const { allowed, user, error } = await checkPermission(request, 'canViewFinances')
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Пользователь не найден' }, { status: 401 })
     }
-    
+
     if (!allowed) {
       await logger.security('Unauthorized access attempt to finance KPI API', { userId: user.id })
       return NextResponse.json({ error: error || 'Недостаточно прав' }, { status: 403 })
@@ -19,71 +19,57 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
 
-    // Фильтрация по проекту и компании
-    let where: any = {
-      project: {
-        companyId: user.companyId!
-      }
+    const where: {
+      project: { companyId: string }
+      projectId?: string
+    } = {
+      project: { companyId: user.companyId! },
     }
 
     if (projectId) {
       where.projectId = projectId
     }
 
-    // Получаем данные о финансах
-    const finances = await prisma.finance.findMany({
-      where,
-      include: {
-        project: {
-          select: { id: true, name: true, budget: true }
-        }
-      }
-    })
+    const [totals, projectBudget] = await Promise.all([
+      prisma.finance.groupBy({
+        by: ['type'],
+        where,
+        _sum: { amount: true },
+      }),
+      projectId
+        ? prisma.project.findUnique({
+            where: { id: projectId },
+            select: { budget: true, expensePlan: true },
+          })
+        : Promise.resolve(null),
+    ])
 
-    // Получаем бюджет и план расходов проекта
-    const projectBudget = projectId 
-      ? await prisma.project.findUnique({
-          where: { id: projectId },
-          select: { budget: true }
-        })
-      : null
+    const sumByType = (type: string) =>
+      Number(totals.find((t) => t.type === type)?._sum.amount || 0)
 
-    // Рассчитываем KPI
-    const plannedIncome = finances
-      .filter(f => f.type === 'PLANNED_INCOME')
-      .reduce((sum, f) => sum + Number(f.amount), 0)
-
-    const actualIncome = finances
-      .filter(f => f.type === 'INCOME')
-      .reduce((sum, f) => sum + Number(f.amount), 0)
-
-    const actualExpenses = finances
-      .filter(f => f.type === 'EXPENSE')
-      .reduce((sum, f) => sum + Number(f.amount), 0)
+    const plannedIncome = sumByType('PLANNED_INCOME')
+    const actualIncome = sumByType('INCOME')
+    const actualExpenses = sumByType('EXPENSE')
 
     const budgetPlan = projectBudget?.budget ? Number(projectBudget.budget) : plannedIncome
-    
-    // План расходов - временно используем 80% от бюджета
-    // TODO: После исправления TypeScript использовать expensePlan из проекта
-    const expensePlan = budgetPlan * 0.8
-    
-    // Отклонение рассчитываем как превышение плана расходов
-    // Если расходов нет или они в пределах плана - отклонение 0
+    const expensePlan = projectBudget?.expensePlan
+      ? Number(projectBudget.expensePlan)
+      : budgetPlan * 0.8
+
     const deviationAmount = actualExpenses > expensePlan ? actualExpenses - expensePlan : 0
     const deviation = expensePlan > 0 ? (deviationAmount / expensePlan) * 100 : 0
 
-    const kpiData = {
+    return NextResponse.json({
       budgetPlan,
       actualExpenses,
       deviation: Math.round(deviation * 100) / 100,
       deviationAmount: Math.round(deviationAmount * 100) / 100,
-      incomeByActs: actualIncome
-    }
-
-    return NextResponse.json(kpiData)
-
+      incomeByActs: actualIncome,
+    })
   } catch (error) {
-    await logger.error('Error fetching finance KPI data', { error: error instanceof Error ? error.message : 'Unknown error' })
+    await logger.error('Error fetching finance KPI data', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
     return NextResponse.json({ error: 'Ошибка получения KPI данных' }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx'
 import { getRemainingContractSections } from './contract-remaining-sections'
+import { buildSpecificationAppendix, type SpecificationData } from './specification-appendix'
 
 export interface ContractData {
   contractNumber: string
@@ -44,6 +45,7 @@ export interface ContractData {
   endDate: string
   totalAmount: string
   vatEnabled: boolean
+  specification?: SpecificationData
 }
 
 export function generateContractDocument(data: ContractData): Document {
@@ -97,7 +99,9 @@ export function generateContractDocument(data: ContractData): Document {
         }),
         
         new Paragraph({
-          text: '1.2. Срок выполнения и место выполнения Работ указаны в соответствующей Спецификации к Договору.',
+          text: data.startDate || data.endDate
+            ? `1.2. Срок выполнения работ: ${data.startDate || '—'} — ${data.endDate || '—'}. Место выполнения Работ: ${data.workAddress || 'указано в Спецификации'}.`
+            : '1.2. Срок выполнения и место выполнения Работ указаны в соответствующей Спецификации к Договору.',
           spacing: { after: 200 },
           alignment: AlignmentType.JUSTIFIED
         }),
@@ -117,14 +121,24 @@ export function generateContractDocument(data: ContractData): Document {
         
         new Paragraph({
           text: data.vatEnabled 
-            ? 'Цена Договора складывается из стоимости всех Спецификаций, заключенных Сторонами в период действия Договора, включая НДС.'
-            : 'Цена Договора складывается из стоимости всех Спецификаций, заключенных Сторонами в период действия Договора, НДС не облагается согласно п. 3 ст. 346.11 гл. 26.2 НК РФ.',
+            ? '2.1. Цена Договора складывается из стоимости всех Спецификаций, заключенных Сторонами в период действия Договора, включая НДС.'
+            : '2.1. Цена Договора складывается из стоимости всех Спецификаций, заключенных Сторонами в период действия Договора, НДС не облагается согласно п. 3 ст. 346.11 гл. 26.2 НК РФ.',
           spacing: { after: 200 },
           alignment: AlignmentType.JUSTIFIED
         }),
+
+        ...(data.totalAmount
+          ? [
+              new Paragraph({
+                text: `2.2. Стоимость работ по Спецификации № 1 составляет ${data.totalAmount} ₽${data.vatEnabled ? ', включая НДС' : ''}.`,
+                spacing: { after: 200 },
+                alignment: AlignmentType.JUSTIFIED,
+              }),
+            ]
+          : []),
         
         new Paragraph({
-          text: 'Заказчик производит авансовый платеж в размере 50% от стоимости Работ, указанной в соответствующей Спецификации, в течение 5 (пяти) рабочих дней с даты получения от Исполнителя счета, путем перечисления денежных средств на расчетный счет Исполнителя.',
+          text: '2.3. Заказчик производит авансовый платеж в размере 50% от стоимости Работ, указанной в соответствующей Спецификации, в течение 5 (пяти) рабочих дней с даты получения от Исполнителя счета, путем перечисления денежных средств на расчетный счет Исполнителя.',
           spacing: { after: 200 },
           alignment: AlignmentType.JUSTIFIED
         }),
@@ -380,6 +394,9 @@ export function generateContractDocument(data: ContractData): Document {
         
         // Разделы 6-13
         ...getRemainingContractSections(),
+
+        // Приложение — Спецификация (смета)
+        ...(data.specification ? buildSpecificationAppendix(data.specification) : []),
         
         // Подписи
         new Paragraph({

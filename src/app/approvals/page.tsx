@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Plus, CheckCircle, X, Clock, XCircle, FileText, Users, Calendar, MessageSquare, Paperclip, History, AlertCircle, Eye, Trash2 } from 'lucide-react'
 import ExpandableDescription from '@/components/expandable-description'
 import ApprovalProgress from '@/components/approval-progress'
+import { ErrorBanner } from '@/components/ui/error-banner'
 
 // Обновленные интерфейсы с новыми полями
 interface Approval {
@@ -80,6 +81,7 @@ export default function ApprovalsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string } | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
@@ -142,13 +144,17 @@ export default function ApprovalsPage() {
 
   const fetchApprovals = async () => {
     try {
+      setLoadError(null)
       const response = await fetch('/api/approvals')
       if (response.ok) {
         const data = await response.json()
         setApprovals(data.approvals || [])
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setLoadError(data.error || 'Не удалось загрузить согласования')
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setLoadError('Ошибка при загрузке согласований')
     } finally {
       setLoading(false)
     }
@@ -530,6 +536,7 @@ export default function ApprovalsPage() {
 
   return (
     <Layout>
+      <ErrorBanner message={loadError} onDismiss={() => setLoadError(null)} />
       {/* Тосты */}
       {toast && (
         <div className="fixed top-4 right-4 z-50 max-w-sm animate-in fade-in slide-in-from-right-5 duration-200">

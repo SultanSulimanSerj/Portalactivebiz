@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { checkPermission, canUserAccessProject } from '@/lib/auth-middleware'
+import { checkPermission } from '@/lib/auth-middleware'
 import { generateId } from '@/lib/id-generator'
 
 function parseDateOnlyToUTC(dateStr: string | undefined): Date | null {
@@ -141,22 +142,36 @@ export async function PUT(
         throw new Error('Некорректный формат даты окончания (ожидается YYYY-MM-DD)')
       }
 
-      // Обновляем этап (даты — UTC полночь выбранного дня)
+      const updateData: Prisma.WorkStageUncheckedUpdateInput = {
+        updatedAt: new Date(),
+      }
+
+      if (name !== undefined) updateData.name = name
+      if (description !== undefined) updateData.description = description || null
+      if (plannedStartUtc) updateData.plannedStart = plannedStartUtc
+      if (plannedEndUtc) updateData.plannedEnd = plannedEndUtc
+      if (actualStart !== undefined) {
+        updateData.actualStart = actualStart
+          ? new Date(actualStart)
+          : { set: null }
+      }
+      if (actualEnd !== undefined) {
+        updateData.actualEnd = actualEnd
+          ? new Date(actualEnd)
+          : { set: null }
+      }
+      if (progress !== undefined) {
+        updateData.progress = Math.min(100, Math.max(0, progress))
+      }
+      if (status !== undefined) updateData.status = status
+      if (responsibleId !== undefined) {
+        updateData.responsibleId = responsibleId || null
+      }
+      if (color !== undefined) updateData.color = color
+
       const updated = await tx.workStage.update({
         where: { id: params.stageId },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(description !== undefined && { description: description || null }),
-          ...(plannedStartUtc !== undefined && { plannedStart: plannedStartUtc }),
-          ...(plannedEndUtc !== undefined && { plannedEnd: plannedEndUtc }),
-          ...(actualStart !== undefined && { actualStart: actualStart ? new Date(actualStart) : null }),
-          ...(actualEnd !== undefined && { actualEnd: actualEnd ? new Date(actualEnd) : null }),
-          ...(progress !== undefined && { progress: Math.min(100, Math.max(0, progress)) }),
-          ...(status !== undefined && { status }),
-          ...(responsibleId !== undefined && { responsibleId: responsibleId || null }),
-          ...(color !== undefined && { color }),
-          updatedAt: new Date()
-        },
+        data: updateData,
         include: {
           responsible: {
             select: { id: true, name: true, email: true }

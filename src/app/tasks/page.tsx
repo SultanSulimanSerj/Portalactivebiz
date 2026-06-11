@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { PageSuspense } from '@/components/page-suspense'
 import Layout from '@/components/layout'
+import { ErrorBanner } from '@/components/ui/error-banner'
 import { Plus, Search, Edit, Trash2, X, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
@@ -18,7 +20,7 @@ interface Task {
   assignments: Array<{ user: { name: string } }>
 }
 
-export default function TasksPage() {
+function TasksPageContent() {
   const searchParams = useSearchParams()
   const projectIdFromUrl = searchParams?.get('projectId')
   
@@ -27,6 +29,7 @@ export default function TasksPage() {
   const [users, setUsers] = useState<any[]>([])
   const [currentProject, setCurrentProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [projectFilter, setProjectFilter] = useState<string>(projectIdFromUrl || 'all')
@@ -50,7 +53,10 @@ export default function TasksPage() {
       fetchCurrentProject()
       setProjectFilter(projectIdFromUrl)
     }
-  }, [projectIdFromUrl])
+    if (searchParams?.get('create') === '1') {
+      setShowModal(true)
+    }
+  }, [projectIdFromUrl, searchParams])
 
   const fetchCurrentProject = async () => {
     if (!projectIdFromUrl) return
@@ -68,14 +74,18 @@ export default function TasksPage() {
 
   const fetchTasks = async () => {
     try {
+      setLoadError(null)
       const response = await fetch('/api/tasks', {
       })
       if (response.ok) {
         const data = await response.json()
         setTasks(data.tasks || [])
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setLoadError(data.error || 'Не удалось загрузить задачи')
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setLoadError('Ошибка при загрузке задач')
     } finally {
       setLoading(false)
     }
@@ -243,6 +253,7 @@ export default function TasksPage() {
   return (
     <Layout>
       <div className="space-y-6">
+        <ErrorBanner message={loadError} onDismiss={() => setLoadError(null)} />
         {/* Header */}
         {currentProject && (
           <Link 
@@ -532,5 +543,13 @@ export default function TasksPage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+export default function TasksPage() {
+  return (
+    <PageSuspense>
+      <TasksPageContent />
+    </PageSuspense>
   )
 }

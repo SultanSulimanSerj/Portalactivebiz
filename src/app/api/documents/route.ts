@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { notifyDocumentUpload } from '@/lib/notifications'
 import { UserRole } from '@/lib/permissions'
 import { generateId } from '@/lib/id-generator'
+import { verifyProjectCompanyAccess } from '@/lib/access-control'
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,7 +65,27 @@ export async function GET(request: NextRequest) {
     const [documents, total] = await Promise.all([
       prisma.document.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          fileName: true,
+          filePath: true,
+          fileSize: true,
+          mimeType: true,
+          version: true,
+          documentNumber: true,
+          category: true,
+          editorStatus: true,
+          contentJson: true,
+          lastExportedAt: true,
+          hasUnpublishedChanges: true,
+          pdfFileName: true,
+          pdfFilePath: true,
+          pdfFileSize: true,
+          createdAt: true,
+          updatedAt: true,
+          projectId: true,
           creator: {
             select: { id: true, name: true, email: true }
           },
@@ -79,17 +100,11 @@ export async function GET(request: NextRequest) {
       prisma.document.count({ where })
     ])
 
-    console.log('=== API /api/documents ===')
-    console.log('Найдено документов:', documents.length)
-    console.log('Первый документ:', documents[0] ? {
-      id: documents[0].id,
-      title: documents[0].title,
-      projectId: documents[0].projectId,
-      project: documents[0].project
-    } : 'Нет документов')
-
     return NextResponse.json({
-      documents,
+      documents: documents.map(({ contentJson, ...doc }) => ({
+        ...doc,
+        hasEditableContent: Boolean(contentJson),
+      })),
       pagination: {
         page,
         limit,
@@ -113,6 +128,13 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { title, description, projectId } = body
+
+    if (projectId) {
+      const hasProjectAccess = await verifyProjectCompanyAccess(user, projectId)
+      if (!hasProjectAccess) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      }
+    }
 
     const document = await prisma.document.create({
       data: {

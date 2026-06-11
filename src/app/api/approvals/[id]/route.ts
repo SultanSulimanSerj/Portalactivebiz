@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { UserRole } from '@/lib/permissions'
+import { verifyApprovalCompanyAccess } from '@/lib/access-control'
+import { checkPermission } from '@/lib/auth-middleware'
 
 export async function GET(
   request: NextRequest,
@@ -201,12 +203,19 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = await authenticateUser(request)
+    const { allowed, user, error } = await checkPermission(request, 'canDeleteApprovals')
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    if (!allowed) {
+      return NextResponse.json({ error: error || 'Forbidden' }, { status: 403 })
+    }
 
-    // Удаляем все связанные записи в транзакции
+    const hasAccess = await verifyApprovalCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
     await prisma.$transaction([
       // Удаляем назначения
       prisma.approvalAssignment.deleteMany({

@@ -80,43 +80,55 @@ export async function GET(request: NextRequest) {
       prisma.project.count({ where })
     ])
 
-    // Добавляем финансовые данные для каждого проекта
-    const projectsWithFinance = await Promise.all(
-      projects.map(async (project) => {
-        const finances = await prisma.finance.findMany({
-          where: { projectId: project.id },
-          select: { type: true, amount: true }
-        })
+    // Финансовые агрегаты одним запросом (без N+1)
+    const projectIds = projects.map((p) => p.id)
+    const financeAggregates =
+      projectIds.length > 0
+        ? await prisma.finance.groupBy({
+            by: ['projectId', 'type'],
+            where: { projectId: { in: projectIds } },
+            _sum: { amount: true },
+          })
+        : []
 
-        // Реальный доход (только INCOME, без планируемого)
-        const income = finances
-          .filter(f => f.type === 'INCOME')
-          .reduce((sum, f) => sum + Number(f.amount), 0)
-        
-        // Планируемый доход (отдельно)
-        const plannedIncome = finances
-          .filter(f => f.type === 'PLANNED_INCOME')
-          .reduce((sum, f) => sum + Number(f.amount), 0)
-        
-        const expenses = finances
-          .filter(f => f.type === 'EXPENSE')
-          .reduce((sum, f) => sum + Number(f.amount), 0)
-        
-        const profit = income - expenses
-        const margin = income > 0 ? ((profit / income) * 100) : 0
+    const financeByProject = new Map<
+      string,
+      { income: number; plannedIncome: number; expenses: number }
+    >()
+    for (const row of financeAggregates) {
+      if (!row.projectId) continue
+      const entry = financeByProject.get(row.projectId) || {
+        income: 0,
+        plannedIncome: 0,
+        expenses: 0,
+      }
+      const amount = Number(row._sum.amount || 0)
+      if (row.type === 'INCOME') entry.income += amount
+      else if (row.type === 'PLANNED_INCOME') entry.plannedIncome += amount
+      else if (row.type === 'EXPENSE') entry.expenses += amount
+      financeByProject.set(row.projectId, entry)
+    }
 
-        return {
-          ...project,
-          financialSummary: {
-            income,
-            plannedIncome,
-            expenses,
-            profit,
-            margin: Math.round(margin * 10) / 10 // Округляем до 1 знака после запятой
-          }
-        }
-      })
-    )
+    const projectsWithFinance = projects.map((project) => {
+      const fin = financeByProject.get(project.id) || {
+        income: 0,
+        plannedIncome: 0,
+        expenses: 0,
+      }
+      const profit = fin.income - fin.expenses
+      const margin = fin.income > 0 ? (profit / fin.income) * 100 : 0
+
+      return {
+        ...project,
+        financialSummary: {
+          income: fin.income,
+          plannedIncome: fin.plannedIncome,
+          expenses: fin.expenses,
+          profit,
+          margin: Math.round(margin * 10) / 10,
+        },
+      }
+    })
 
     return NextResponse.json({
       projects: projectsWithFinance,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { PageSuspense } from '@/components/page-suspense'
 import Layout from '@/components/layout'
 import { Plus, TrendingUp, TrendingDown, X, Trash2, ArrowLeft, DollarSign, Percent, Download, Settings, Building2, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
@@ -10,6 +11,7 @@ import { KpiCard } from '@/components/finance/KpiCard'
 import { ExpenseStructureChart } from '@/components/finance/ExpenseStructureChart'
 import { BudgetProgressBar } from '@/components/finance/BudgetProgressBar'
 import { BudgetCategoriesWithOperations } from '@/components/finance/BudgetCategoriesWithOperations'
+import { ErrorBanner } from '@/components/ui/error-banner'
 
 interface FinanceRecord {
   id: string
@@ -31,16 +33,22 @@ const PROJECT_STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Отменён'
 }
 
-export default function FinancePage() {
+function FinancePageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const projectIdFromUrl = searchParams?.get('projectId')
   
   const [records, setRecords] = useState<FinanceRecord[]>([])
+  const [financeSummary, setFinanceSummary] = useState<{
+    income: number
+    expenses: number
+    expensesByCategory?: Record<string, number>
+  } | null>(null)
   const [projects, setProjects] = useState<any[]>([])
   const [currentProject, setCurrentProject] = useState<any>(null)
   const [projectSearch, setProjectSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [pageError, setPageError] = useState<string | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showBudgetModal, setShowBudgetModal] = useState(false)
   const [budgetFormData, setBudgetFormData] = useState('')
@@ -142,7 +150,7 @@ export default function FinancePage() {
   // Пересчитываем данные бюджета когда records или currentProject меняются
   useEffect(() => {
     fetchBudgetData()
-  }, [records, currentProject, projectIdFromUrl])
+  }, [records, currentProject, projectIdFromUrl, financeSummary])
 
   const fetchCurrentProject = async () => {
     if (!projectIdFromUrl) return
@@ -159,7 +167,10 @@ export default function FinancePage() {
 
   const fetchRecords = async () => {
     try {
-      const response = await fetch('/api/finance', {
+      setPageError(null)
+      const params = new URLSearchParams({ limit: '5000' })
+      if (projectIdFromUrl) params.set('projectId', projectIdFromUrl)
+      const response = await fetch(`/api/finance?${params}`, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache'
@@ -167,11 +178,14 @@ export default function FinancePage() {
       })
       if (response.ok) {
         const data = await response.json()
-        console.log('Finance records loaded:', data.finances?.length)
         setRecords(data.finances || [])
+        setFinanceSummary(data.summary || null)
+      } else {
+        const data = await response.json().catch(() => ({}))
+        setPageError(data.error || 'Не удалось загрузить финансовые данные')
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
+      setPageError('Ошибка при загрузке финансовых данных')
     } finally {
       setLoading(false)
     }
@@ -196,27 +210,39 @@ export default function FinancePage() {
       }
 
       // Считаем расходы и доходы из records
-      const projectRecords = projectIdFromUrl 
+      const projectRecords = projectIdFromUrl
         ? records.filter(r => r.project?.id === projectIdFromUrl)
         : records
-      
-      const spent = projectRecords
-        .filter(r => r.type === 'EXPENSE')
-        .reduce((sum, r) => sum + Number(r.amount), 0)
-      
-      const received = projectRecords
-        .filter(r => r.type === 'INCOME')
-        .reduce((sum, r) => sum + Number(r.amount), 0)
+
+      const spent =
+        projectIdFromUrl
+          ? projectRecords
+              .filter(r => r.type === 'EXPENSE')
+              .reduce((sum, r) => sum + Number(r.amount), 0)
+          : financeSummary?.expenses ?? projectRecords
+              .filter(r => r.type === 'EXPENSE')
+              .reduce((sum, r) => sum + Number(r.amount), 0)
+
+      const received =
+        projectIdFromUrl
+          ? projectRecords
+              .filter(r => r.type === 'INCOME')
+              .reduce((sum, r) => sum + Number(r.amount), 0)
+          : financeSummary?.income ?? projectRecords
+              .filter(r => r.type === 'INCOME')
+              .reduce((sum, r) => sum + Number(r.amount), 0)
 
       setBudgetData({ budget, estimateTotal, spent, received })
 
-      // Структура расходов по категориям
-      const expensesByCategory = projectRecords
-        .filter(r => r.type === 'EXPENSE')
-        .reduce((acc: Record<string, number>, r) => {
-          acc[r.category] = (acc[r.category] || 0) + Number(r.amount)
-          return acc
-        }, {})
+      const expensesByCategory =
+        !projectIdFromUrl && financeSummary?.expensesByCategory
+          ? financeSummary.expensesByCategory
+          : projectRecords
+              .filter(r => r.type === 'EXPENSE')
+              .reduce((acc: Record<string, number>, r) => {
+                acc[r.category] = (acc[r.category] || 0) + Number(r.amount)
+                return acc
+              }, {})
 
       const structureData = Object.entries(expensesByCategory)
         .map(([category, amount]) => ({ category, amount }))
@@ -562,6 +588,7 @@ export default function FinancePage() {
   return (
     <Layout>
       <div className="space-y-6">
+        <ErrorBanner message={pageError} onDismiss={() => setPageError(null)} />
         {message && (
           <div className={`p-4 rounded-lg border flex items-center justify-between ${message.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'}`}>
             <span>{message.text}</span>
@@ -1004,5 +1031,13 @@ export default function FinancePage() {
         )}
       </div>
     </Layout>
+  )
+}
+
+export default function FinancePage() {
+  return (
+    <PageSuspense>
+      <FinancePageContent />
+    </PageSuspense>
   )
 }

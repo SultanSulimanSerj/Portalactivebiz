@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { verifyTaskCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 
 export async function PATCH(
@@ -10,6 +11,11 @@ export async function PATCH(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Subtask not found' }, { status: 404 })
     }
 
     const body = await request.json()
@@ -51,6 +57,11 @@ export async function DELETE(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Subtask not found' }, { status: 404 })
     }
 
     // Проверяем, что подзадача существует и принадлежит задаче

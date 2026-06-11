@@ -8,6 +8,7 @@ import { Send, Paperclip, Smile, MoreVertical } from 'lucide-react'
 import Layout from '@/components/layout'
 import { useSocket } from '@/contexts/SocketContext'
 import { useSession } from 'next-auth/react'
+import { extractMentionNames } from '@/lib/mention-utils'
 
 interface Message {
   id: string
@@ -55,6 +56,15 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageInputRef = useRef<HTMLInputElement>(null)
   const { socket, isConnected } = useSocket()
+
+  const appendChatMessage = (message: Message) => {
+    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]))
+  }
+
+  const messageMatchesFilter = (message: Message, projectId: string) => {
+    if (projectId) return message.project?.id === projectId
+    return !message.project
+  }
   const { data: session } = useSession()
 
   useEffect(() => {
@@ -69,48 +79,19 @@ export default function ChatPage() {
 
   // WebSocket для реального времени
   useEffect(() => {
-    if (!socket) {
-      console.log('⚠️ Socket не инициализирован')
-      return
-    }
+    if (!socket || !isConnected) return
 
-    console.log('🔌 WebSocket эффект запущен, проект:', selectedProject || 'общий чат')
-
-    // Если выбран проект, присоединяемся к его комнате
     if (selectedProject) {
-      console.log('📁 Присоединение к проекту:', selectedProject)
       socket.emit('join-project', selectedProject)
     }
 
-    // Слушаем новые сообщения
     const handleNewMessage = (message: Message) => {
-      console.log('📨 Получено сообщение через WebSocket:', {
-        messageId: message.id,
-        projectId: message.project?.id,
-        currentFilter: selectedProject || 'общий чат'
-      })
-      
-      // Проверяем, относится ли сообщение к текущему фильтру
-      if (selectedProject) {
-        if (message.project?.id === selectedProject) {
-          console.log('✅ Добавляем сообщение в список (проект совпадает)')
-          setMessages((prev) => [...prev, message])
-        } else {
-          console.log('⏭️ Пропускаем сообщение (другой проект)')
-        }
-      } else {
-        // Общий чат - сообщения без проекта
-        if (!message.project) {
-          console.log('✅ Добавляем сообщение в общий чат')
-          setMessages((prev) => [...prev, message])
-        } else {
-          console.log('⏭️ Пропускаем сообщение (есть проект)')
-        }
+      if (messageMatchesFilter(message, selectedProject)) {
+        appendChatMessage(message)
       }
     }
 
     socket.on('new-message', handleNewMessage)
-    console.log('👂 Слушаем события new-message')
 
     // Слушаем индикатор печати
     socket.on('user-typing', (data: { userName: string; isTyping: boolean }) => {
@@ -132,14 +113,13 @@ export default function ChatPage() {
 
     // Cleanup
     return () => {
-      console.log('🧹 Cleanup WebSocket')
       if (selectedProject) {
         socket.emit('leave-project', selectedProject)
       }
       socket.off('new-message', handleNewMessage)
       socket.off('user-typing')
     }
-  }, [socket, selectedProject])
+  }, [socket, isConnected, selectedProject])
 
   useEffect(() => {
     scrollToBottom()
@@ -400,13 +380,7 @@ export default function ChatPage() {
         })
       }
 
-      // Извлекаем упоминания сотрудников (@..., без #)
-      const mentionRegex = /@([^\s@#]+(?:\s+[^\s@#]+)*)/g
-      const mentions: string[] = []
-      let match
-      while ((match = mentionRegex.exec(newMessage)) !== null) {
-        mentions.push(match[1].trim())
-      }
+      const mentions = extractMentionNames(newMessage)
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -421,10 +395,13 @@ export default function ChatPage() {
       })
 
       if (response.ok) {
+        const message = await response.json()
+        if (messageMatchesFilter(message, selectedProject)) {
+          appendChatMessage(message)
+        }
         setNewMessage('')
         setShowMentionSuggestions(false)
         setShowProjectSuggestions(false)
-        // Сообщение придёт через WebSocket
       }
     } catch (err) {
       console.error('Error sending message:', err)
@@ -592,11 +569,11 @@ export default function ChatPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm">
-              <Paperclip className="h-4 w-4" />
+            <Button variant="ghost" size="sm" disabled title="Вложения — в разработке">
+              <Paperclip className="h-4 w-4 opacity-40" />
             </Button>
-            <Button variant="ghost" size="sm">
-              <Smile className="h-4 w-4" />
+            <Button variant="ghost" size="sm" disabled title="Эмодзи — в разработке">
+              <Smile className="h-4 w-4 opacity-40" />
             </Button>
             <div className="flex-1 relative">
               {/* Подсказки: сотрудники (@) — с поиском по имени/email */}

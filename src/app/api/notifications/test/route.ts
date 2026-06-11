@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { createNotification, createProjectNotification, createSystemNotification } from '@/lib/notifications'
 import { prisma } from '@/lib/prisma'
+import { isDebugRouteAllowed } from '@/lib/prod-guard'
 
 export async function POST(request: NextRequest) {
+  if (!isDebugRouteAllowed()) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   try {
     const user = await authenticateUser(request)
     if (!user) {

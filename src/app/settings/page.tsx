@@ -10,6 +10,8 @@ import Layout from '@/components/layout'
 import { useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 
+const userPrefsKey = (userId: string) => `manexa_user_prefs_${userId}`
+
 export default function SettingsPage() {
   const { data: session, update } = useSession()
   const [settings, setSettings] = useState({
@@ -96,6 +98,23 @@ export default function SettingsPage() {
     }
   }, [session])
 
+  useEffect(() => {
+    if (!session?.user?.id || typeof window === 'undefined') return
+    try {
+      const saved = localStorage.getItem(userPrefsKey(session.user.id))
+      if (saved) {
+        const prefs = JSON.parse(saved)
+        setSettings((prev) => ({
+          ...prev,
+          notifications: prefs.notifications ?? prev.notifications,
+          security: prefs.security ?? prev.security,
+        }))
+      }
+    } catch {
+      // ignore invalid localStorage data
+    }
+  }, [session?.user?.id])
+
   // Загрузка настроек уведомлений о сроках
   useEffect(() => {
     const fetchDeadlineSettings = async () => {
@@ -158,6 +177,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           name: settings.name,
+          email: settings.email,
           phone: settings.phone,
           address: settings.address
         }),
@@ -218,6 +238,16 @@ export default function SettingsPage() {
             contactPhone: updatedCompany.company?.contactPhone || prev.companyRequisites.contactPhone
           }
         }))
+
+        if (session?.user?.id) {
+          localStorage.setItem(
+            userPrefsKey(session.user.id),
+            JSON.stringify({
+              notifications: settings.notifications,
+              security: settings.security,
+            })
+          )
+        }
 
         // Обновляем сессию NextAuth
         await update()
@@ -349,52 +379,46 @@ export default function SettingsPage() {
                   <Bell className="h-5 w-5 mr-2 text-primary" />
                   Уведомления
                 </CardTitle>
-                <CardDescription>Настройки уведомлений и оповещений</CardDescription>
+                <CardDescription>
+                  Email, SMS и Push — в разработке (пока только in-app уведомления в системе).
+                  Для уведомлений о сроках и бюджете используйте блок ниже.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between opacity-60">
                   <div>
                     <Label>Email уведомления</Label>
-                    <p className="text-sm text-gray-500">Получать уведомления на email</p>
+                    <p className="text-sm text-gray-500">Скоро — пока недоступно</p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.notifications.email}
-                    onChange={(e) => setSettings({
-                      ...settings,
-                      notifications: {...settings.notifications, email: e.target.checked}
-                    })}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    checked={false}
+                    disabled
+                    className="h-4 w-4 text-primary border-gray-300 rounded cursor-not-allowed"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between opacity-60">
                   <div>
                     <Label>SMS уведомления</Label>
-                    <p className="text-sm text-gray-500">Получать SMS уведомления</p>
+                    <p className="text-sm text-gray-500">Скоро — пока недоступно</p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.notifications.sms}
-                    onChange={(e) => setSettings({
-                      ...settings,
-                      notifications: {...settings.notifications, sms: e.target.checked}
-                    })}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    checked={false}
+                    disabled
+                    className="h-4 w-4 text-primary border-gray-300 rounded cursor-not-allowed"
                   />
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between opacity-60">
                   <div>
                     <Label>Push уведомления</Label>
-                    <p className="text-sm text-gray-500">Получать push уведомления в браузере</p>
+                    <p className="text-sm text-gray-500">Скоро — пока недоступно</p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={settings.notifications.push}
-                    onChange={(e) => setSettings({
-                      ...settings,
-                      notifications: {...settings.notifications, push: e.target.checked}
-                    })}
-                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                    checked={false}
+                    disabled
+                    className="h-4 w-4 text-primary border-gray-300 rounded cursor-not-allowed"
                   />
                 </div>
               </CardContent>
@@ -596,9 +620,11 @@ export default function SettingsPage() {
                   <Shield className="h-5 w-5 mr-2 text-primary" />
                   Безопасность
                 </CardTitle>
-                <CardDescription>Настройки безопасности и доступа</CardDescription>
+                <CardDescription>
+                  Настройки 2FA и таймаута сессии — в разработке, пока не применяются на сервере.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 opacity-60 pointer-events-none">
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>Двухфакторная аутентификация</Label>

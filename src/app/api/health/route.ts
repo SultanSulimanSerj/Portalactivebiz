@@ -3,9 +3,21 @@ import { getSystemMetrics } from '@/lib/monitoring'
 import { performanceMonitor } from '@/lib/monitoring'
 import { alertManager } from '@/lib/alerts'
 import { prisma } from '@/lib/prisma'
+import { authenticateUser } from '@/lib/auth-api'
+import { UserRole } from '@/lib/permissions'
+
+async function requireHealthAccess(request: NextRequest) {
+  if (process.env.HEALTH_PUBLIC === 'true') return true
+  const user = await authenticateUser(request)
+  return !!user && (user.role === UserRole.OWNER || user.role === UserRole.ADMIN)
+}
 
 export async function GET(request: NextRequest) {
   try {
+    if (!(await requireHealthAccess(request))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const startTime = Date.now()
     
     // Проверяем подключение к базе данных
@@ -102,6 +114,10 @@ export async function GET(request: NextRequest) {
 // Endpoint для получения метрик
 export async function POST(request: NextRequest) {
   try {
+    if (!(await requireHealthAccess(request))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { type, timeRange } = await request.json()
     
     let metrics

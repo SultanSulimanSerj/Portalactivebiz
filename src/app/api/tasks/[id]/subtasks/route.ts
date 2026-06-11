@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
+import { verifyTaskCompanyAccess } from '@/lib/access-control'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
 
@@ -13,13 +14,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Проверяем, что задача существует и пользователь имеет доступ
-    const task = await prisma.task.findUnique({
-      where: { id: params.id },
-      select: { id: true, companyId: true }
-    })
-
-    if (!task) {
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
@@ -55,10 +51,14 @@ export async function POST(
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    // Проверяем, что задача существует
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+
     const task = await prisma.task.findUnique({
       where: { id: params.id },
-      select: { id: true, companyId: true }
+      select: { id: true, companyId: true },
     })
 
     if (!task) {

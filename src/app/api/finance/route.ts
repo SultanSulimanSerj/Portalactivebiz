@@ -36,6 +36,10 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
+    const rawPage = parseInt(searchParams.get('page') || '1', 10)
+    const rawLimit = parseInt(searchParams.get('limit') || '500', 10)
+    const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage
+    const limit = isNaN(rawLimit) || rawLimit < 1 ? 500 : Math.min(rawLimit, 5000)
 
     // Кэширование отключено для актуальности данных
     // const cacheKey = getCacheKey(request)
@@ -77,28 +81,40 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const finances = await prisma.finance.findMany({
-      where,
-      include: {
-        project: {
-          select: { id: true, name: true }
-        }
-      },
-      orderBy: { date: 'desc' }
-    })
-
-    // Calculate totals
-    const totals = await prisma.finance.groupBy({
-      by: ['type'],
-      where,
-      _sum: {
-        amount: true
-      }
-    })
+    const [finances, total, totals, categoryTotals] = await Promise.all([
+      prisma.finance.findMany({
+        where,
+        include: {
+          project: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.finance.count({ where }),
+      prisma.finance.groupBy({
+        by: ['type'],
+        where,
+        _sum: { amount: true },
+      }),
+      prisma.finance.groupBy({
+        by: ['category', 'type'],
+        where,
+        _sum: { amount: true },
+      }),
+    ])
 
     const income = totals.find(t => t.type === 'INCOME')?._sum.amount || 0
     const expenses = totals.find(t => t.type === 'EXPENSE')?._sum.amount || 0
     const profit = Number(income) - Number(expenses)
+
+    const expensesByCategory: Record<string, number> = {}
+    for (const row of categoryTotals) {
+      if (row.type !== 'EXPENSE' || !row.category) continue
+      expensesByCategory[row.category] = Number(row._sum.amount || 0)
+    }
 
     const result = {
       finances,
@@ -106,8 +122,15 @@ export async function GET(request: NextRequest) {
         income: Number(income),
         expenses: Number(expenses),
         profit,
-        margin: Number(income) > 0 ? (profit / Number(income)) * 100 : 0
-      }
+        margin: Number(income) > 0 ? (profit / Number(income)) * 100 : 0,
+        expensesByCategory,
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
     }
 
     // Кэширование отключено

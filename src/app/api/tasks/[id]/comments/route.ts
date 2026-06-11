@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authenticateUser } from '@/lib/auth-api'
 import { prisma } from '@/lib/prisma'
 import { generateId } from '@/lib/id-generator'
+import { verifyTaskCompanyAccess } from '@/lib/access-control'
 
 export async function GET(
   request: NextRequest,
@@ -11,6 +12,11 @@ export async function GET(
     const user = await authenticateUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
     const comments = await prisma.taskComment.findMany({
@@ -49,6 +55,11 @@ export async function POST(
 
     if (!content || !content.trim()) {
       return NextResponse.json({ error: 'Content is required' }, { status: 400 })
+    }
+
+    const hasAccess = await verifyTaskCompanyAccess(user, params.id)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
 
     // Получаем задачу для companyId

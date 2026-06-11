@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Layout from '@/components/layout'
+import { PermissionGuard } from '@/components/permission-guard'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -105,34 +106,57 @@ export default function MonitoringPage() {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Загрузка данных мониторинга...</p>
+      <PermissionGuard permission="canViewSystemSettings" fallback={
+        <Layout>
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-600">Недостаточно прав для просмотра мониторинга</p>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      }>
+        <Layout>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Загрузка данных мониторинга...</p>
+            </div>
+          </div>
+        </Layout>
+      </PermissionGuard>
     )
   }
 
   if (error) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-red-600">{error}</p>
-            <Button onClick={fetchHealthData} className="mt-4">
-              Попробовать снова
-            </Button>
+      <PermissionGuard permission="canViewSystemSettings" fallback={
+        <Layout>
+          <div className="flex items-center justify-center h-64">
+            <p className="text-gray-600">Недостаточно прав для просмотра мониторинга</p>
           </div>
-        </div>
-      </Layout>
+        </Layout>
+      }>
+        <Layout>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <p className="text-red-600">{error}</p>
+              <Button onClick={fetchHealthData} className="mt-4">
+                Попробовать снова
+              </Button>
+            </div>
+          </div>
+        </Layout>
+      </PermissionGuard>
     )
   }
 
   return (
+    <PermissionGuard permission="canViewSystemSettings" fallback={
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-gray-600">Недостаточно прав для просмотра мониторинга</p>
+        </div>
+      </Layout>
+    }>
     <Layout>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -273,5 +297,6 @@ export default function MonitoringPage() {
         </Card>
       </div>
     </Layout>
+    </PermissionGuard>
   )
 }
