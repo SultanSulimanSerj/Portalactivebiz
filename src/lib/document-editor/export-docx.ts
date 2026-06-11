@@ -1,7 +1,11 @@
+import { renderCommercialOfferDocx, renderContractDocx } from '@/lib/document-renderer/docx-renderer'
+import { PDF_MIME } from '@/lib/upd-generator'
 import { uploadFile } from '@/lib/storage'
 import { generateId } from '@/lib/id-generator'
-import { renderCommercialOfferDocx, renderContractDocx } from '@/lib/document-renderer/docx-renderer'
 import type { CommercialOfferDocumentContent, ContractDocumentContent } from './types'
+import type { ExportFormat } from './export-upd'
+import type { FileExport, FnsExportResult } from './export-fns'
+import { convertDocxBufferToPdf } from './xlsx-to-pdf'
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -12,20 +16,67 @@ export interface DocxExportResult {
   mimeType: string
 }
 
+async function appendPdfFromDocx(
+  result: FnsExportResult,
+  docxFileName: string,
+  format: ExportFormat,
+  renderDocx: () => Promise<Buffer>
+): Promise<void> {
+  if (format !== 'pdf' && format !== 'both') return
+
+  const docxBuffer = result.docx?.buffer ?? (await renderDocx())
+  if (!result.docx && (format === 'pdf' || format === 'both')) {
+    result.docx = {
+      buffer: docxBuffer,
+      fileName: docxFileName,
+      fileSize: docxBuffer.length,
+      mimeType: DOCX_MIME,
+    }
+  }
+
+  const pdfBuffer = await convertDocxBufferToPdf(docxBuffer, docxFileName)
+  result.pdf = {
+    buffer: pdfBuffer,
+    fileName: docxFileName.replace(/\.docx$/i, '.pdf'),
+    fileSize: pdfBuffer.length,
+    mimeType: PDF_MIME,
+  }
+}
+
 export async function exportCommercialOfferContent(
-  content: CommercialOfferDocumentContent
-): Promise<DocxExportResult> {
-  const buffer = await renderCommercialOfferDocx(content.data)
-  const fileName = `КП_№${content.data.offerNumber}.docx`
-  return { buffer, fileName, fileSize: buffer.length, mimeType: DOCX_MIME }
+  content: CommercialOfferDocumentContent,
+  format: ExportFormat = 'both'
+): Promise<FnsExportResult & { data: CommercialOfferDocumentContent['data'] }> {
+  const data = content.data
+  const result: FnsExportResult = {}
+  const fileName = `КП_№${data.offerNumber}.docx`
+
+  if (format === 'xlsx' || format === 'pdf' || format === 'both') {
+    const buffer = await renderCommercialOfferDocx(data)
+    result.docx = { buffer, fileName, fileSize: buffer.length, mimeType: DOCX_MIME }
+  }
+
+  await appendPdfFromDocx(result, fileName, format, () => renderCommercialOfferDocx(data))
+
+  return { ...result, data }
 }
 
 export async function exportContractContent(
-  content: ContractDocumentContent
-): Promise<DocxExportResult> {
-  const buffer = await renderContractDocx(content.data)
-  const fileName = `Договор_подряда_№${content.data.contractNumber}.docx`
-  return { buffer, fileName, fileSize: buffer.length, mimeType: DOCX_MIME }
+  content: ContractDocumentContent,
+  format: ExportFormat = 'both'
+): Promise<FnsExportResult & { data: ContractDocumentContent['data'] }> {
+  const data = content.data
+  const result: FnsExportResult = {}
+  const fileName = `Договор_подряда_№${data.contractNumber}.docx`
+
+  if (format === 'xlsx' || format === 'pdf' || format === 'both') {
+    const buffer = await renderContractDocx(data)
+    result.docx = { buffer, fileName, fileSize: buffer.length, mimeType: DOCX_MIME }
+  }
+
+  await appendPdfFromDocx(result, fileName, format, () => renderContractDocx(data))
+
+  return { ...result, data }
 }
 
 export async function uploadDocumentFile(
@@ -38,3 +89,5 @@ export async function uploadDocumentFile(
   await uploadFile(storageKey, buffer, mimeType)
   return storageKey
 }
+
+export type { FileExport }

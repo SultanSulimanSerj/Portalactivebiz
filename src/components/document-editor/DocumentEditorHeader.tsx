@@ -162,15 +162,33 @@ export function DocumentEditorHeader({
                 </button>
                 {exportMode === 'docx' ? (
                   onExport && (
-                    <button
-                      type="button"
-                      onClick={() => onExport('both')}
-                      disabled={exporting}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      <FileText className="h-4 w-4" />
-                      {exporting ? exportStatusLabel || 'Формирование…' : 'Сформировать'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onExport('both')}
+                        disabled={exporting}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <FileText className="h-4 w-4" />
+                        {exporting ? exportStatusLabel || 'Формирование…' : 'Word + PDF'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onExport('xlsx')}
+                        disabled={exporting}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        Word
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onExport('pdf')}
+                        disabled={exporting}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        PDF
+                      </button>
+                    </>
                   )
                 ) : (
                   onExport && (

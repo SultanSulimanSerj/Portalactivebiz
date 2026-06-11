@@ -6,7 +6,7 @@ import { renderKs3Xlsx } from '@/lib/document-renderer/ks3/ks3-xlsx-renderer'
 import { renderInvoiceDocx } from '@/lib/document-renderer/invoice/invoice-docx-renderer'
 import type { Ks2DocumentContent, Ks3DocumentContent, InvoiceDocumentContent } from './types'
 import { validateFnsFormDocument } from './fns-validator'
-import { convertXlsxBufferToPdf } from './xlsx-to-pdf'
+import { convertDocxBufferToPdf, convertXlsxBufferToPdf } from './xlsx-to-pdf'
 import type { ExportFormat } from './export-upd'
 
 const DOCX_MIME =
@@ -135,6 +135,25 @@ export async function exportInvoiceContent(
   if (format === 'xlsx' || format === 'pdf' || format === 'both') {
     const buffer = await renderInvoiceDocx(data)
     result.docx = { buffer, fileName: docxFileName, fileSize: buffer.length, mimeType: DOCX_MIME }
+  }
+
+  if (format === 'pdf' || format === 'both') {
+    const docxBuffer = result.docx?.buffer ?? (await renderInvoiceDocx(data))
+    if (!result.docx) {
+      result.docx = {
+        buffer: docxBuffer,
+        fileName: docxFileName,
+        fileSize: docxBuffer.length,
+        mimeType: DOCX_MIME,
+      }
+    }
+    const pdfBuffer = await convertDocxBufferToPdf(docxBuffer, docxFileName)
+    result.pdf = {
+      buffer: pdfBuffer,
+      fileName: docxFileName.replace(/\.docx$/i, '.pdf'),
+      fileSize: pdfBuffer.length,
+      mimeType: PDF_MIME,
+    }
   }
 
   return { ...result, data }

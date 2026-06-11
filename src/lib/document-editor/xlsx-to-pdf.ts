@@ -16,19 +16,18 @@ const SOFFICE_CANDIDATES = [
 ].filter((p): p is string => Boolean(p))
 
 function sanitizeBaseName(name: string): string {
-  return name.replace(/[^\w\u0400-\u04FF.-]+/g, '_').slice(0, 80) || 'upd'
+  return name.replace(/[^\w\u0400-\u04FF.-]+/g, '_').slice(0, 80) || 'document'
 }
 
 async function convertViaGotenberg(
   gotenbergUrl: string,
-  xlsxBuffer: Buffer,
-  fileName: string
+  sourceBuffer: Buffer,
+  fileName: string,
+  mimeType: string
 ): Promise<Buffer> {
   const base = gotenbergUrl.replace(/\/$/, '')
   const formData = new FormData()
-  const blob = new Blob([new Uint8Array(xlsxBuffer)], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  })
+  const blob = new Blob([new Uint8Array(sourceBuffer)], { type: mimeType })
   formData.append('files', blob, fileName)
 
   const response = await fetch(`${base}/forms/libreoffice/convert`, {
@@ -45,15 +44,15 @@ async function convertViaGotenberg(
 }
 
 async function convertViaLibreOfficeLocal(
-  xlsxBuffer: Buffer,
+  sourceBuffer: Buffer,
   baseName: string,
   fileName: string
 ): Promise<Buffer> {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'manexa-upd-pdf-'))
-  const xlsxPath = path.join(tmpDir, fileName)
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'manexa-office-pdf-'))
+  const sourcePath = path.join(tmpDir, fileName)
   const pdfPath = path.join(tmpDir, `${baseName}.pdf`)
 
-  await fs.writeFile(xlsxPath, xlsxBuffer)
+  await fs.writeFile(sourcePath, sourceBuffer)
 
   let lastError: Error | null = null
   for (const soffice of SOFFICE_CANDIDATES) {
@@ -68,7 +67,7 @@ async function convertViaLibreOfficeLocal(
           'pdf',
           '--outdir',
           tmpDir,
-          xlsxPath,
+          sourcePath,
         ],
         { timeout: 120_000 }
       )
@@ -85,32 +84,61 @@ async function convertViaLibreOfficeLocal(
   throw lastError || new Error('LibreOffice не найден')
 }
 
-/**
- * Конвертирует XLSX (официальная форма УПД) в PDF с сохранением вёрстки.
- * Использует Gotenberg (docker) или локальный LibreOffice.
- */
-export async function convertXlsxBufferToPdf(
-  xlsxBuffer: Buffer,
-  suggestedName: string
+async function convertOfficeBufferToPdf(
+  sourceBuffer: Buffer,
+  fileName: string,
+  mimeType: string,
+  pdfErrorHint: string
 ): Promise<Buffer> {
-  const fileName = suggestedName.endsWith('.xlsx') ? suggestedName : `${suggestedName}.xlsx`
-  const baseName = sanitizeBaseName(fileName.replace(/\.xlsx$/i, ''))
+  const baseName = sanitizeBaseName(fileName.replace(/\.[^.]+$/i, ''))
 
   const gotenbergUrl = process.env.GOTENBERG_URL
   if (gotenbergUrl) {
     try {
-      return await convertViaGotenberg(gotenbergUrl, xlsxBuffer, fileName)
+      return await convertViaGotenberg(gotenbergUrl, sourceBuffer, fileName, mimeType)
     } catch (err) {
       console.error('Gotenberg PDF conversion failed, trying LibreOffice:', err)
     }
   }
 
   try {
-    return await convertViaLibreOfficeLocal(xlsxBuffer, baseName, fileName)
+    return await convertViaLibreOfficeLocal(sourceBuffer, baseName, fileName)
   } catch {
     throw new Error(
-      'PDF формируется из того же Excel-шаблона УПД. Для конвертации нужен LibreOffice или сервис Gotenberg. ' +
+      `${pdfErrorHint} Для конвертации нужен LibreOffice или сервис Gotenberg. ` +
         'Запустите: docker compose up -d gotenberg и задайте GOTENBERG_URL=http://localhost:3001 в .env'
     )
   }
+}
+
+/**
+ * Конвертирует XLSX (официальная форма УПД) в PDF с сохранением вёрстки.
+ */
+export async function convertXlsxBufferToPdf(
+  xlsxBuffer: Buffer,
+  suggestedName: string
+): Promise<Buffer> {
+  const fileName = suggestedName.endsWith('.xlsx') ? suggestedName : `${suggestedName}.xlsx`
+  return convertOfficeBufferToPdf(
+    xlsxBuffer,
+    fileName,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'PDF формируется из того же Excel-шаблона УПД.'
+  )
+}
+
+/**
+ * Конвертирует DOCX (КП, счёт, договор) в PDF.
+ */
+export async function convertDocxBufferToPdf(
+  docxBuffer: Buffer,
+  suggestedName: string
+): Promise<Buffer> {
+  const fileName = suggestedName.endsWith('.docx') ? suggestedName : `${suggestedName}.docx`
+  return convertOfficeBufferToPdf(
+    docxBuffer,
+    fileName,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'PDF формируется из Word-файла.'
+  )
 }

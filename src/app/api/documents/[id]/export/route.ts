@@ -82,7 +82,7 @@ export async function POST(
       const result = await executeDocumentExport(params.id, user.companyId, {
         publish,
         comment,
-        format: 'both',
+        format,
         contentHash,
       })
 

@@ -74,33 +74,36 @@ export async function exportDocumentContent(
   if (isInvoiceContent(content)) {
     const result = await exportInvoiceContent(content, format)
     return {
-      primaryMimeType: result.docx?.mimeType ?? '',
-      primaryFileName: result.docx?.fileName ?? '',
+      primaryMimeType: result.docx?.mimeType ?? result.pdf?.mimeType ?? '',
+      primaryFileName: result.docx?.fileName ?? result.pdf?.fileName ?? '',
       title: `Счёт № ${result.data.documentNumber} от ${result.data.documentDate}`,
       docx: result.docx,
+      pdf: result.pdf,
       data: result.data,
     }
   }
 
   if (isCommercialOfferContent(content)) {
-    const docx = await exportCommercialOfferContent(content)
+    const result = await exportCommercialOfferContent(content, format)
     return {
-      primaryMimeType: docx.mimeType,
-      primaryFileName: docx.fileName,
-      title: `КП № ${content.data.offerNumber} от ${content.data.offerDate}`,
-      docx,
-      data: content.data,
+      primaryMimeType: result.docx?.mimeType ?? result.pdf?.mimeType ?? '',
+      primaryFileName: result.docx?.fileName ?? result.pdf?.fileName ?? '',
+      title: `КП № ${result.data.offerNumber} от ${result.data.offerDate}`,
+      docx: result.docx,
+      pdf: result.pdf,
+      data: result.data,
     }
   }
 
   if (isContractContent(content)) {
-    const docx = await exportContractContent(content)
+    const result = await exportContractContent(content, format)
     return {
-      primaryMimeType: docx.mimeType,
-      primaryFileName: docx.fileName,
-      title: `Договор № ${content.data.contractNumber} от ${content.data.contractDate}`,
-      docx,
-      data: content.data,
+      primaryMimeType: result.docx?.mimeType ?? result.pdf?.mimeType ?? '',
+      primaryFileName: result.docx?.fileName ?? result.pdf?.fileName ?? '',
+      title: `Договор № ${result.data.contractNumber} от ${result.data.contractDate}`,
+      docx: result.docx,
+      pdf: result.pdf,
+      data: result.data,
     }
   }
 
