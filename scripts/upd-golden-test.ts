@@ -1,8 +1,32 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import PizZip from 'pizzip'
 import { generateUpdExcelBuffer, type UpdDocumentData } from '../src/lib/upd-generator'
 import { inspectXlsxBuffer, assertUpdQuality } from '../src/lib/document-renderer/xlsx-patcher'
+
+function readXlsxCell(buffer: Buffer, address: string): string | null {
+  const zip = new PizZip(buffer)
+  const sheet = zip.file('xl/worksheets/sheet1.xml')?.asText()
+  const sstXml = zip.file('xl/sharedStrings.xml')?.asText()
+  if (!sheet || !sstXml) return null
+
+  const cellMatch = sheet.match(
+    new RegExp(`<c r="${address}"([^>]*)>([\\s\\S]*?)</c>|<c r="${address}"([^>]*)/>`)
+  )
+  if (!cellMatch) return null
+  const attrs = cellMatch[1] ?? cellMatch[3] ?? ''
+  const inner = cellMatch[2]
+  if (!inner) return ''
+  const valueMatch = /<v>([^<]*)<\/v>/.exec(inner)
+  if (!valueMatch) return ''
+  if (/\bt="s"/.test(attrs)) {
+    const all = [...sstXml.matchAll(/<si>[\s\S]*?<\/si>/g)]
+    const si = all[parseInt(valueMatch[1], 10)]?.[0] ?? ''
+    return [...si.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map((m) => m[1]).join('')
+  }
+  return valueMatch[1]
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.join(__dirname, '..')
@@ -78,6 +102,7 @@ const sampleData: UpdDocumentData = {
   totalWithVat: 44900,
   hasVat: false,
   basisText: 'Счет на оплату № 36 от 27.05.2026',
+  paymentDocText: 'Счёт на оплату № 36 от 27.05.2026',
   shipDate: '27.05.2026',
   signatorySeller: 'Копыл С.В.',
 }
@@ -94,6 +119,15 @@ async function main() {
 
   const templateMetrics = inspectXlsxBuffer(fs.readFileSync(templatePath))
   assert(generatedMetrics.mergeCount === templateMetrics.mergeCount, 'merge count совпадает с шаблоном')
+
+  assert(readXlsxCell(generated, 'BA9') === '№', 'в BA9 остаётся символ «№»')
+  const paymentDoc = readXlsxCell(generated, 'BD9')
+  assert(
+    paymentDoc != null && paymentDoc.includes('Счёт на оплату № 36'),
+    'платёжный документ заполнен в BD9'
+  )
+  assert(readXlsxCell(generated, 'BN55') === '20', 'префикс года в BN55')
+  assert(readXlsxCell(generated, 'BR55') === '26', 'суффикс года в BR55 (не полный 2026)')
 
   console.log('Все проверки УПД пройдены')
 }

@@ -211,7 +211,12 @@ export function buildUpdXlsxPatchPlan(data: UpdDocumentData): UpdXlsxPatchPlan {
   if (parsedDate) {
     assign(assignments, UPD_CELLS.shipDay, String(parsedDate.day))
     assign(assignments, UPD_CELLS.shipMonth, parsedDate.monthName)
-    assign(assignments, UPD_CELLS.shipYear, String(parsedDate.year))
+    assign(assignments, UPD_CELLS.shipYearPrefix, String(Math.floor(parsedDate.year / 100)))
+    assign(
+      assignments,
+      UPD_CELLS.shipYearSuffix,
+      String(parsedDate.year % 100).padStart(2, '0')
+    )
   }
 
   return {

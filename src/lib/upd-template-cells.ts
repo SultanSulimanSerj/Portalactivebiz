@@ -9,7 +9,8 @@ export const UPD_CELLS = {
   sellerInnKpp: 'BA6',
   shipper: 'BA7',
   consignee: 'BA8',
-  paymentDoc: 'BA9',
+  /** Текст после «№» (merge BD9:CG9), не в BA9 — там только символ «№» */
+  paymentDoc: 'BD9',
   buyerName: 'BA19',
   buyerAddress: 'BA20',
   buyerInnKpp: 'BA21',
@@ -31,7 +32,9 @@ export const UPD_CELLS = {
   signatory2: 'BO42',
   shipDay: 'AI55',
   shipMonth: 'AO55',
-  shipYear: 'BR55',
+  /** В шаблоне BN55 уже содержит «20», в BR55 — только последние 2 цифры года */
+  shipYearPrefix: 'BN55',
+  shipYearSuffix: 'BR55',
 } as const
 
 /** Колонки строки товара */
