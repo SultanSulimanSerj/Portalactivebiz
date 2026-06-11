@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { UserPlus, Eye, EyeOff, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import { InnLookupField } from '@/components/counterparty/InnLookupField'
+import { toCompanyRegistrationFields } from '@/lib/counterparty/map-fields'
 
 export default function SignUpPage() {
   const [formData, setFormData] = useState({
@@ -270,18 +272,19 @@ export default function SignUpPage() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="inn">ИНН компании</Label>
-                <Input
-                  id="inn"
-                  type="text"
-                  value={formData.inn}
-                  onChange={(e) => handleInputChange('inn', e.target.value)}
-                  placeholder="Введите ИНН компании"
-                  required
-                  className="mt-1"
-                />
-              </div>
+              <InnLookupField
+                label="ИНН компании"
+                value={formData.inn}
+                onChange={(inn) => handleInputChange('inn', inn)}
+                onFound={(data) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    ...toCompanyRegistrationFields(data),
+                  }))
+                }
+                placeholder="Введите ИНН — данные подставятся автоматически"
+                required
+              />
 
               <div>
                 <Label htmlFor="kpp">КПП компании</Label>

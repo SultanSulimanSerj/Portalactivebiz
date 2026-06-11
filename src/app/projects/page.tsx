@@ -7,6 +7,8 @@ import Layout from '@/components/layout'
 import { ErrorBanner } from '@/components/ui/error-banner'
 import { Plus, Search, Edit, Trash2, Users, X } from 'lucide-react'
 import Link from 'next/link'
+import { InnLookupField } from '@/components/counterparty/InnLookupField'
+import { toClientRequisitesFields } from '@/lib/counterparty/map-fields'
 
 interface Project {
   id: string
@@ -577,16 +579,20 @@ function ProjectsPageContent() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 mt-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">ИНН</label>
-                      <input
-                        type="text"
-                        value={formData.clientInn}
-                        onChange={(e) => setFormData({...formData, clientInn: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="1234567890"
-                      />
-                    </div>
+                    <InnLookupField
+                      variant="native"
+                      label="ИНН"
+                      value={formData.clientInn}
+                      onChange={(clientInn) => setFormData({ ...formData, clientInn })}
+                      onFound={(data) => {
+                        setShowClientRequisites(true)
+                        setFormData((prev) => ({
+                          ...prev,
+                          ...toClientRequisitesFields(data),
+                        }))
+                      }}
+                      placeholder="1234567890"
+                    />
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">КПП</label>
