@@ -104,7 +104,7 @@ const sampleData: UpdDocumentData = {
   totalVat: 0,
   totalWithVat: 44900,
   hasVat: false,
-  basisText: 'Счет на оплату № 36 от 27.05.2026',
+  basisText: 'Счёт на оплату № 36 от 27.05.2026',
   paymentDocText: 'Счёт на оплату № 36 от 27.05.2026',
   shipDate: '27.05.2026',
   signatorySeller: 'Копыл С.В.',
@@ -129,7 +129,9 @@ async function main() {
     paymentDoc != null && paymentDoc.includes('Счёт на оплату № 36'),
     'платёжный документ заполнен в BD9'
   )
-  assert(readXlsxCell(generated, 'CI9') === '27.05.2026', 'дата платёжного документа в CI9')
+  assert(readXlsxCell(generated, 'CH9') === 'от 27.05.2026', 'дата платёжного документа в CH9')
+  const basis = readXlsxCell(generated, 'AR48')
+  assert(basis != null && basis.includes('Счёт на оплату № 36'), 'основание передачи — счёт на оплату')
   assert(readXlsxCell(generated, 'BN55') === '20', 'префикс года в BN55')
   assert(readXlsxCell(generated, 'BR55') === '26', 'суффикс года в BR55 (не полный 2026)')
 

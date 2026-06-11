@@ -5,6 +5,7 @@ import { DOCUMENT_CONTENT_SCHEMA_VERSION, buildSourceMeta, isContractContent, is
 import { applyCalculationsToUpdData } from './upd-calculations'
 import { lineItemsToUpdMergedItems } from './document-line-items'
 import { buildPartiesFromProject } from './prefill-fns-common'
+import { buildInvoicePaymentReference } from '@/lib/document-renderer/upd/upd-cell-map'
 
 export interface CreateUpdDraftParams {
   projectId: string
@@ -118,6 +119,10 @@ export async function buildUpdDraftContent(
   }
 
   const contractBasis = await loadContractBasis(contractDocumentId, projectId, companyId)
+  const invoiceReference = buildInvoicePaymentReference(
+    invoiceData.documentNumber,
+    invoiceData.documentDate
+  )
 
   const dateStr = documentDate.toLocaleDateString('ru-RU')
   const rawData = buildUpdDocumentData(
@@ -126,11 +131,12 @@ export async function buildUpdDraftContent(
     documentNumber,
     documentDate,
     updStatus,
-    { basisText: contractBasis }
+    { basisText: contractBasis ?? invoiceReference }
   )
 
   rawData.shipDate = dateStr
-  rawData.paymentDocText = `Счёт на оплату № ${invoiceData.documentNumber} от ${invoiceData.documentDate}`
+  rawData.paymentDocText = invoiceReference
+  rawData.basisText = contractBasis ?? invoiceReference
 
   if (invoiceData.seller?.inn) {
     rawData.seller = {

@@ -13,8 +13,8 @@ export const UPD_CELLS = {
   paymentDocLabel: 'BA9',
   /** Номер/название платёжного документа (merge BD9:CG9) */
   paymentDoc: 'BD9',
-  /** Дата платёжного документа после подписи «от» (merge CH9:CJ9, ячейка CI9) */
-  paymentDocDate: 'CI9',
+  /** «от ДД.ММ.ГГГГ» — merge CH9:CJ9, значение только в левой ячейке CH9 */
+  paymentDocDate: 'CH9',
   buyerName: 'BA19',
   buyerAddress: 'BA20',
   buyerInnKpp: 'BA21',

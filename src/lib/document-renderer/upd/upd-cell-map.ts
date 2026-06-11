@@ -63,11 +63,32 @@ function parseRuDate(dateStr: string) {
   return { day, month, year, monthName: MONTHS_GENITIVE[month - 1] || '' }
 }
 
+export function normalizeRuDateString(dateStr: string): string {
+  const trimmed = dateStr.trim()
+  const dmy = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(trimmed)
+  if (dmy) {
+    return `${dmy[1].padStart(2, '0')}.${dmy[2].padStart(2, '0')}.${dmy[3]}`
+  }
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed)
+  if (iso) {
+    return `${iso[3]}.${iso[2]}.${iso[1]}`
+  }
+  return trimmed
+}
+
+export function buildInvoicePaymentReference(documentNumber: string, documentDate: string): string {
+  const date = normalizeRuDateString(documentDate)
+  return `Счёт на оплату № ${documentNumber.trim()} от ${date}`
+}
+
 /** «Счёт на оплату № 1 от 11.06.2026» → текст и дата для разных ячеек формы */
 function splitPaymentDocText(text: string): { main: string; date?: string } {
-  const match = text.match(/^(.+?)\s+от\s+(\d{2}\.\d{2}\.\d{4})\s*$/)
+  const match = text.match(/^(.+?)\s+от\s+(.+)$/i)
   if (match) {
-    return { main: match[1].trim(), date: match[2] }
+    const date = normalizeRuDateString(match[2].trim())
+    if (/^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
+      return { main: match[1].trim(), date }
+    }
   }
   return { main: text.trim() }
 }
@@ -164,7 +185,7 @@ export function buildUpdXlsxPatchPlan(data: UpdDocumentData): UpdXlsxPatchPlan {
   assign(assignments, UPD_CELLS.paymentDocLabel, null)
   assign(assignments, UPD_CELLS.paymentDoc, paymentParts.main)
   if (paymentParts.date) {
-    assign(assignments, UPD_CELLS.paymentDocDate, paymentParts.date)
+    assign(assignments, UPD_CELLS.paymentDocDate, `от ${paymentParts.date}`)
   }
 
   assign(assignments, UPD_CELLS.buyerName, buyerLabel)
@@ -191,7 +212,7 @@ export function buildUpdXlsxPatchPlan(data: UpdDocumentData): UpdXlsxPatchPlan {
     data.basisText ||
     (data.contractNumber
       ? `Договор № ${data.contractNumber}${data.contractDate ? ` от ${data.contractDate}` : ''}`
-      : `Проект «${data.projectName}»`)
+      : data.paymentDocText || `Проект «${data.projectName}»`)
   assign(assignments, UPD_CELLS.basisText, basis)
 
   const signSeller =
