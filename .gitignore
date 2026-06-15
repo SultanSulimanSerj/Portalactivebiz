@@ -68,3 +68,7 @@ backups/
 
 # Docker
 .dockerignore
+
+# Local temp / test artifacts
+.tmp/
+tmp/
